@@ -22,6 +22,7 @@ abstract class Model{
     const TYPE_FILE = 'file';
     //
     
+    private $_endpoint;
     /**
      * @var array
      */
@@ -29,15 +30,11 @@ abstract class Model{
         //define model data
     );
     /**
-     * @var array
-     */
-    private $_options = array(
-        //
-    );
-    /**
      * @param array $data
      */
-    protected function __construct( array $data = array( ) ) {
+    protected function __construct( $endpoint , array $data = array( ) ) {
+        
+        $this->_endpoint = explode('.', $endpoint);
         
         if( count( $data ) ){
             $this->import($data);
@@ -142,6 +139,14 @@ abstract class Model{
         return preg_replace('/\\\\/', '/',  dirname( $ref->getFileName() ) );
         //return preg_replace('/\\\\/', '/', plugin_dir_path(__FILE__ ) );
     }
+    /**
+     * @param string $email
+     * @return boolean
+     */
+    protected function __matchEmail( $email ){
+         return !preg_match("/^([a-z0-9\+_\-]+)(\.[a-z0-9\+_\-]+)*@([a-z0-9\-]+\.)+[a-z]{2,6}$/ix", $email) ? FALSE : TRUE;
+    }
+    
     public final function endpoint(){
 
     }
@@ -505,14 +510,14 @@ abstract class Model{
     public static final function create( $model , $data = array() ){
         try{
             //$package = self::package($model);
-            $namespace = explode('.', $model);
-            $path = self::__importPath($namespace);
-            $class = self::__importClass($namespace);
+            $route = explode('.', $model);
+            $path = self::__importPath($route);
+            $class = self::__importClass($route);
 
             if(file_exists($path)){
                 require_once $path;
                 if(class_exists($class) && is_subclass_of($class, self::class)){
-                    return new $class( $data );
+                    return new $class( $route,$data );
                 }
                 else{
                     throw new \Exception(sprintf('Invalid Model %s',$class) );
