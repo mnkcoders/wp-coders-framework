@@ -34,7 +34,7 @@ abstract class Model{
      */
     protected function __construct( $endpoint , array $data = array( ) ) {
         
-        $this->_endpoint = explode('.', $endpoint);
+        $this->_endpoint = is_array($endpoint) ? $endpoint : explode('.', $endpoint);
         
         if( count( $data ) ){
             $this->import($data);

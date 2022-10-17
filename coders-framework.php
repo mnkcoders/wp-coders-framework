@@ -37,6 +37,7 @@ abstract class CodersApp{
      * 
      */
     protected function __construct( $admin = FALSE  ) {
+
         if( !$admin ){
             $this->importComponents( );        
         }
@@ -95,6 +96,12 @@ abstract class CodersApp{
     protected static final function __pluginsDir(){
         return preg_replace('/\\\\/','/', plugin_dir_path(__DIR__ ) );
     }
+    /** 
+     * @return string
+     */
+    protected static final function __rootDir(){
+        return preg_replace('/\\\\/','/', plugin_dir_path( __FILE__ ) );
+    }
     /**
      * @return string
      */
@@ -143,11 +150,35 @@ abstract class CodersApp{
         return $showContents ? self::$_endpoints : array_keys(self::$_endpoints);
     }
     /**
-     * @param string $name
-     * @return string
+     * @param mixed $string
+     * @return mixed
      */
-    private static final function __cc( $name ){
-        return preg_replace('/\s/', '', ucwords( preg_replace('/_/', ' ', $name ) ) );
+    public static final function __cc( $string ){
+        if(is_array($string)){
+            $output = array();
+            foreach( $string as $str ){
+                $output[] = self::__cc($str);
+            }
+            return $output;
+        }
+        return preg_replace('/\s/', '', ucwords(preg_replace('/[\-\_]/', ' ' , $string)));
+        //return preg_replace('/\s/', '', ucwords( preg_replace('/_/', ' ', $name ) ) );
+    }
+    /**
+     * @param string|array $string
+     * @return string|array
+     */
+    public static final function __sc( $string ){
+        if(is_array($string)){
+            $output = array();
+            foreach( $string as $str ){
+                $output[] = camelToUnderscore($str);
+            }
+            return $output;
+        }
+
+        return strtolower(preg_replace(
+            '/(?<=\d)(?=[A-Za-z])|(?<=[A-Za-z])(?=\d)|(?<=[a-z])(?=[A-Z])/', $us, $string));
     }
 
     /**
@@ -215,6 +246,7 @@ abstract class CodersApp{
         if( !array_key_exists($endpoint, self::$_endpoints)){
             self::$_endpoints[$endpoint] = array(
                 'ajax' => $useAjax,
+                'type' => self::__type($endpoint),
             );
         }
     }
@@ -278,6 +310,8 @@ abstract class CodersApp{
                         $this->__endpoint(),
                         preg_replace('/-/', '.', $route));
         
+        //var_dump($request);
+        
         return $request->response();
     }
     /**
@@ -336,15 +370,12 @@ abstract class CodersApp{
     protected static final function __runAdmin( $endpoint ){
         if( is_admin() && self::exists($endpoint)){
             if( $endpoint === 'coders-framework' ){
-                printf('<div class="wrap"><h1>%s</h1>', get_admin_page_title());
-                foreach( self::list() as $ep ){
-                    printf('<div class="card"><h2>%s</h2><p><i class="">%s</i></p></div>',
-                            $ep,self::__type($ep));
-                }
-                printf('<ul></div>');
+                //$appList = self::list(true);
+                require sprintf('%s/admin/admin.php',self::__rootDir());
             }
             else{
-                $app = self::$_endpoints[$endpoint]['app'];
+                $list = self::list(true);
+                $app = $list[$endpoint]['app'];
                 $app->importComponents();
                 var_dump($app);
             }
@@ -360,14 +391,7 @@ abstract class CodersApp{
             //$setup = self::$_endpoints[$endpoint];
             $call = self::__callable($endpoint);
             //$setup = self::$_endpoints[$endpoint];
-            if( $endpoint === 'coders-framework' && is_admin()){
-                switch($action){
-                    case 'list':
-                        foreach( CodersApp::list() as $ep ){
-                            printf('<p>%s [<i>%s</i>]</p>',$ep,self::__type($ep));
-                        }
-                        break;
-                }
+            if( $endpoint === self::class ){
             }
             elseif(function_exists ($call) ){
                 $call( $action );
@@ -376,6 +400,9 @@ abstract class CodersApp{
                 $app = self::load($endpoint,'application');
                 if( false !== $app ){
                     $app->response($action);
+                }
+                elseif(self::debug()){
+                    printf('<p>Invalid App loader %s</p>',$endpoint);
                 }
             }
         }
@@ -449,10 +476,12 @@ abstract class CodersApp{
         });
     }
     /** 
-     * @param string $input
-     * @return string
+     * @param string|array $input
+     * @return string|array
      */
     public static final function Class( $input ){
+        
+        return self::__cc($input);
         
         if(is_array($input)){
             //fix this mess ¬_¬
@@ -481,6 +510,12 @@ abstract class CodersApp{
                 require_once($path);
                 return self::create($endpoint );
             }
+            else{
+                self::notice(sprintf('invalid endpoint path [%s]',$path));
+            }
+        }
+        else{
+            self::notice(sprintf('invalid endpoint [%s]',$endpoint));
         }
         return FALSE;
     }
@@ -493,7 +528,7 @@ abstract class CodersApp{
         if ( !is_null(self::$_instance) && strlen($endpoint) ){
             $class = self::Class($endpoint);
             if (class_exists($class) && is_subclass_of($class, self::class, TRUE)) {
-                self::$_instance = new $class($endpoint  );
+                self::$_instance = new $class( is_admin()  );
             }
         }
         return self::$_instance;
@@ -560,7 +595,7 @@ abstract class CodersApp{
                 printf('<div class="notice is-dimissible %s"><p>%s</p></div>',$class,$message );
             });            
         }
-        else{
+        elseif(self::debug ()){
             printf('<p class="notify %s">%s</p>' ,$class, $message );
         }
     }
@@ -640,4 +675,6 @@ abstract class CodersApp{
 }
 
 CodersApp::init();
+
+
 

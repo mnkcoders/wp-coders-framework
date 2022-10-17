@@ -14,6 +14,8 @@ abstract class View{
     private $_view = 'default';
     private $_endpoint = array();
     
+    private $_strings = array();
+    
     private $_activeForm = '';
 
     /**
@@ -103,6 +105,15 @@ abstract class View{
                             is_array($arguments[1]) ? $arguments[1] : array(),
                             count($arguments) > 2 ? $arguments[2] : null ) :
                             '<!-- empty html -->';
+            case preg_match('/^action_/', $name):
+                $action = substr($name, 7);
+                if( count( $arguments )){
+                    return $this->__action(
+                            $arguments[0],
+                            count($arguments) > 1 ? $arguments[1] : $this->label($action),
+                            array('class'=>$action));
+                }
+                return sprintf('<!-- invalid action [%s]-->',$action);
             case preg_match('/^input_/', $name):
                 return $this->__input(substr($name, 6));
             case preg_match(  '/^list_[a-z_]*_options$/' , $name ):
@@ -122,6 +133,18 @@ abstract class View{
                 return $this->has($name) ? $this->_model->get($get) : '';
         }
         return '';
+    }
+    /**
+     * @param string $action
+     * @param string $label
+     * @param array $args
+     * @return String
+     */
+    protected function __action( $action , $label , array $args = array()){
+        
+        $url = Request::LinkAction($action, $args );
+        
+        return Renderer::action($url, $label , array('class'=> preg_replace('/\./', '-', $action)));
     }
     /**
      * List to override and add custom inputs
@@ -213,6 +236,17 @@ abstract class View{
      */
     protected function addMeta( array $content ){
         $this->_metas[] = $content;
+        return $this;
+    }
+    /**
+     * @param string $key
+     * @param string $string
+     * @return \CODERS\Framework\View
+     */
+    protected function addString( $key , $string ){
+        if(is_string($key) && is_string($string)){
+            $this->_strings[$key] = $string;
+        }
         return $this;
     }
     /**
@@ -353,7 +387,16 @@ abstract class View{
      * @return string
      */
     protected function label( $name ){
-        return $this->has($name) ? $this->_model->meta($name,'label',$name) : $name;
+        return $this->has($name) ?
+                $this->_model->meta($name,'label',$name) :
+                        $this->string($name);
+    }
+    /**
+     * @param string $key
+     * @return string
+     */
+    protected function string( $key ){
+        return array_key_exists($key, $this->_strings) ? $this->_strings[$key] : $key;
     }
 
     
@@ -380,11 +423,11 @@ abstract class View{
 
         
     /**
-     * @param string $model
+     * @param \CODERS\Framework\Model $model
      * @return \CODERS\Framework\View
      */
-    public function setModel( $model ){
-        if(is_null($this->_model)){
+    public function setModel( Model $model ){
+        if(!is_null($model) && is_null($this->_model)){
             $this->_model = $model;
         }
         return $this;

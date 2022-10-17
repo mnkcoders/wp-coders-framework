@@ -266,6 +266,26 @@ class Request{
         return self::URL( $request , $url );
     }
     /**
+     * @param string $action
+     * @param array $args
+     * @return string
+     */
+    public static final function LinkAction( $action , array $args = array() ){
+        $route = explode('.', $action);
+        $endpoint_url = get_site_url() . '/' . $route[0];
+        if(count($route) > 1 ){
+            $endpoint_url .= '/' . $route[1];
+            if( count( $route)  > 2){
+                $endpoint_url .= '-' .$route[2];
+                if( count($route) > 3){
+                    $endpoint_url .= '-' . $route[3];
+                }
+            }
+        }
+        var_dump($endpoint_url);
+        return self::URL($args,$endpoint_url);
+    }
+    /**
      * @param array $params
      * @param string $url
      * @return String|URL
@@ -347,11 +367,15 @@ class Request{
             $class = $this->__contextClass();
             if(class_exists($class) && is_subclass_of($class, self::class)){
                 $controller = new $class( $this->endPoint() ,$this->route());
-                if( $controller !== FALSE ){
-                    $action = $this->action();
-                    return $controller->$action( $this->list());
-                }
+                $action = $this->action();
+                return $controller->$action( $this->list());
             }
+            elseif (\CodersApp::debug()) {
+                \CodersApp::notice(sprintf('Invalid context class %s', $class), 'error');
+            }
+        }
+        elseif (\CodersApp::debug()) {
+            \CodersApp::notice(sprintf('Invalid context path %s', $path), 'error');
         }
         return FALSE;
     }
@@ -362,7 +386,7 @@ class Request{
     protected final function importModel( $model ){
         return  class_exists('\CODERS\Framework\Model') ?
             \CODERS\Framework\Model::create( sprintf('%s.%s',$this->endPoint(),$model) ) :
-                FALSE;
+                null;
     }
     /**
      * @param string $view
@@ -371,7 +395,7 @@ class Request{
     protected final function importView( $view ){
         return  class_exists('\CODERS\Framework\View') ?
             \CODERS\Framework\View::create( sprintf('%s.%s.%s',$this->endPoint(),$this->module(),$view) ) :
-                FALSE;
+                null;
     }
     /**
      * @param array $args
@@ -388,11 +412,16 @@ class Request{
     protected function default_action( array $args = array() ){
         
         $view = $this->importView('main');
-        if( $view !== false ){
+        if( !is_null($view) ){
             $view->show();
             return TRUE;
         }
-        
+        else{
+            return $this->error_action( array(
+                'error' => sprintf('invalid view for [%s]', $this->route(true)),
+            ) );
+        }
+
         return FALSE;
     }
 }
