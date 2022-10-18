@@ -30,7 +30,7 @@ abstract class View{
     /**
      * @var array Estilos del componente
      */
-    private $_styles = array();
+    //private $_styles = array();
     /**
      * @var array Links del componente
      */
@@ -45,8 +45,7 @@ abstract class View{
     private $_classes = array('coders-framework');
 
     /**
-     * @param string $appName
-     * @param string $module
+     * @param string $route
      */
     protected function __construct( $route ) {
 
@@ -142,7 +141,7 @@ abstract class View{
      */
     protected function __action( $action , $label , array $args = array()){
         
-        $url = Request::LinkAction($action, $args );
+        $url = Request::createLink($action, $args );
         
         return Renderer::action($url, $label , array('class'=> preg_replace('/\./', '-', $action)));
     }
@@ -358,15 +357,6 @@ abstract class View{
         return $full ? implode('.', $this->_endpoint) : $this->_endpoint[0];
     }
     /**
-     * @return string
-     */
-    protected function module(){
-        $path = explode('/views/',$this->__path()); 
-        $nodes = explode('/', $path[0]);
-        return $nodes[ count($nodes) - 1 ];
-    }
-
-    /**
      * @param string $name
      * @return array
      */
@@ -461,8 +451,11 @@ abstract class View{
         if(file_exists($path)){
             require $path;
         }
-        else{
+        elseif(\CodersApp::debug()){
             //printf('<!-- html: %s.%s not found -->',$this->endpoint(), $view);
+            printf('<p class="info">html layout not found [%s]</p>',$path);
+        }
+        else{
             printf('<!-- html: %s not found -->',$path);
         }
     }
@@ -572,11 +565,10 @@ abstract class View{
      */
     private static final function __modClass( array $route ){
         //$route = explode('.', $route);
-        return count($route) > 2 ?
-                    sprintf('\CODERS\%s\%s\%sView',
+        return count($route) > 1 ?
+                    sprintf('\CODERS\%s\%sView',
                             \CodersApp::Class($route[0]),
-                            \CodersApp::Class($route[1]),
-                            \CodersApp::Class($route[2])) :
+                            \CodersApp::Class($route[1])) :
                     sprintf('\CODERS\Framework\Views\%s',
                             \CodersApp::Class($route[0]));
     }
@@ -585,12 +577,11 @@ abstract class View{
      * @return String|PAth
      */
     private static final function __modPath( array $route ){
-        return count($route) > 2 ?
-                    sprintf('%s/modules/%s/views/%s/view.php',
+        return count($route) > 1 ?
+                    sprintf('%s/components/views/%s/view.php',
                             \CodersApp::path($route[0]),
-                            $route[1],
-                            $route[2]) :
-                    sprintf('%s/components/views/%s.php',
+                            $route[1]) :
+                    sprintf('%s/components/views/%s/view.php',
                             \CodersApp::path(),
                             $route[0]);
     }
@@ -604,17 +595,25 @@ abstract class View{
         $namespace = explode('.', $route);
         $path = self::__modPath($namespace);
         $class = self::__modClass($namespace);
-        if(file_exists($path)){
-
-            require_once $path;
-
-            if(class_exists($class) && is_subclass_of($class, self::class)){
-
-                return new $class( $route );
+        try{
+            if(file_exists($path)){
+                require_once $path;
+                if(class_exists($class) && is_subclass_of($class, self::class)){
+                    return new $class( $route );
+                }
+                else{
+                    throw new \Exception(sprintf('Invalid View [%s]',$class) );
+                }
+            }
+            else{
+                throw new \Exception(sprintf('Invalid path [%s]',$path) );
             }
         }
+        catch (\Exception $ex) {
+            \CodersApp::notice($ex->getMessage());
+        }
         
-        return FALSE;
+        return null;
     }
 }
 /**

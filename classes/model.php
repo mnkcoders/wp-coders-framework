@@ -436,28 +436,13 @@ abstract class Model{
      */
     private static final function package( $request ){
         $package = explode('.', $request);
-        if(count($package) > 2 ){
-            /**
-             * Import plugin MVC local model
-             */
-            return array(
-                'path' => sprintf('%s/modules/%s/models/%s.php',
-                    strtolower($package[0]), //plugin
-                    strtolower($package[1]), //module
-                    strtolower($package[2])),//model
-                'class' => sprintf('\CODERS\%s\%s\%sModel',
-                    $package[0],
-                    $package[1],
-                    $package[2]),
-            );
-        }
-        elseif( count( $package) > 1 ){
+        if( count( $package) > 1 ){
             /**
              * Import plugin logics model from components
              */
             return array(
                 'path' => sprintf('%s/components/models/%s.php',
-                    strtolower($package[0]), //plugin
+                    strtolower($package[0]), //plugin / endpoint
                     strtolower($package[1])), //model
                 'class' => sprintf('\CODERS\%s\%sModel',
                     $package[0],
@@ -470,7 +455,7 @@ abstract class Model{
              */
             return array(
                 'path' => sprintf('%s/components/models/%s.php',
-                    CODERS_FRAMEWORK_BASE,strtolower( $package[0] ) ),
+                    \CodersApp::path(), strtolower( $package[0] ) ),
                 'class' => sprintf('\CODERS\Framework\Models\%sModel',$package[0])
             );
         }
@@ -507,32 +492,30 @@ abstract class Model{
      * @return \CODERS\Framework\Model | boolean
      * @throws \Exception
      */
-    public static final function create( $model , $data = array() ){
+    public static final function create($model, $data = array()) {
+        //$package = self::package($model);
+        $route = explode('.', $model);
+        $path = self::__importPath($route);
+        $class = self::__importClass($route);
         try{
-            //$package = self::package($model);
-            $route = explode('.', $model);
-            $path = self::__importPath($route);
-            $class = self::__importClass($route);
-
             if(file_exists($path)){
                 require_once $path;
                 if(class_exists($class) && is_subclass_of($class, self::class)){
                     return new $class( $route,$data );
                 }
                 else{
-                    throw new \Exception(sprintf('Invalid Model %s',$class) );
+                    throw new \Exception(sprintf('Invalid Model [%s]',$class) );
                 }
             }
             else{
-                throw new \Exception(sprintf('Invalid path %s',$path) );
+                throw new \Exception(sprintf('Invalid path [%s]',$path) );
             }
-            return FALSE;
         }
-        catch (Exception $ex) {
-            die( $ex->getMessage());
+        catch (\Exception $ex) {
+            \CodersApp::notice($ex->getMessage());
         }
         
-        return FALSE;
+        return null;
     }
     /**
      * @return string

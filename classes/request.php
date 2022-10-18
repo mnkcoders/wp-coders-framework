@@ -17,7 +17,6 @@ class Request{
     const INPUT_REQUEST = 10;
     
     private $_endpoint = '';
-    private $_module = 'dashboard';
     private $_context = 'main';
     private $_action = 'default';
     private $_ts;
@@ -32,19 +31,13 @@ class Request{
         
         $request = explode('.', strlen($route) ? $route : '' );
         if( strlen($request[0]) ){
-            $this->_module =  $request[0];
+            $this->_context = $request[0];
         }
-        if( $this->_module === 'ajax' ){
-            $this->_context = 'ajax';
-            $this->_action = $request[count($request)-1];
+        if( count($request) > 1 ){
+            $this->_context =  $request[1];
         }
-        else{
-            if( count($request) > 1 ){
-                $this->_context =  $request[1];
-            }
-            if(count($request) > 2){
-                $this->_action =  $request[2];
-            }
+        if(count($request) > 2){
+            $this->_action =  $request[2];
         }
         //var_dump(strval($this));
     }
@@ -186,25 +179,15 @@ class Request{
      */
     public final function action( $full = FALSE ){
         
-        if( $full ){
-            return $this->_module === 'ajax' ?
-                $this->_module .'.' .$this->_action :
-                $this->_module .'.'.$this->_context.'.'.$this->_action;
-            
-        }
-     
-        return $this->_action;
+        return $full ?
+                $this->_context.'.'.$this->_action :
+                $this->_action;
     }
     /**
      * @param bool $cc Camel Case
      * @return String
      */
     private final function context( $cc = FALSE ){ return $cc ? ucfirst($this->_context) : $this->_context; }
-    /**
-     * @param bool $cc Camel Case
-     * @return string Context Module
-     */
-    public final function module( $cc = FALSE ){ return $cc ? ucfirst($this->_module) : $this->_module; }
     /**
      * @param bool $cc Camel Case
      * @return String
@@ -241,24 +224,23 @@ class Request{
 
         $request = array();
         
-        $is_admin = $this->module() === 'admin';
+        $is_admin = is_admin();
         $url = $is_admin ? admin_url() : get_site_url();
         
         if( $is_admin ){
-            $page = $this->context() !== 'main' ?
-                    $this->endPoint() .'-'. $this->module() :
-                    $this->endPoint();
-            $request['page'] = $page;
+            // admin-page = endpoint-controller
+            $request['page'] = $this->endPoint() .'-'. $this->context();
             $request['action'] = $this->action();
             $url .=  'admin.php';
         }
         else{
-            $route = array($this->module());
-            if( $this->context() !== 'main' ){
+            $route = array();
+            if( $this->action() !== 'default' ){
                 $route[] = $this->context();
-                if( $this->action() !== 'default' ){
-                    $route[] = $this->action();
-                }
+                $route[] = $this->action();
+            }
+            elseif($this->context() !== 'main' ){
+                $route[] = $this->context();
             }
             $url .= sprintf( '/%s/%s/' , $this->endPoint() , implode('-' , $route ) );
         }
@@ -270,19 +252,15 @@ class Request{
      * @param array $args
      * @return string
      */
-    public static final function LinkAction( $action , array $args = array() ){
+    public static final function createLink( $action , array $args = array() ){
         $route = explode('.', $action);
         $endpoint_url = get_site_url() . '/' . $route[0];
         if(count($route) > 1 ){
-            $endpoint_url .= '/' . $route[1];
-            if( count( $route)  > 2){
-                $endpoint_url .= '-' .$route[2];
-                if( count($route) > 3){
-                    $endpoint_url .= '-' . $route[3];
-                }
+            for( $i = 1 ; $i < count( $route ) ; $i++ ){
+                $endpoint_url .= ($i === 1 ) ? '/' . $route[$i] : '-' .$route[$i];
             }
         }
-        var_dump($endpoint_url);
+        //var_dump($endpoint_url);
         return self::URL($args,$endpoint_url);
     }
     /**
@@ -340,27 +318,31 @@ class Request{
      * @return String
      */
     private final function __contextPath(){
-            return sprintf('%s/modules/%s/controllers/%s.php',
+            return sprintf('%s/components/controllers/%s.php',
                     \CodersApp::path($this->endPoint()) ,
-                    $this->module(),
                     $this->context() );
     }
     /**
      * @return String
      */
     private final function __contextClass(){
-            return sprintf('\CODERS\%s\%s\%sController',
+            return sprintf('\CODERS\%s\%sController',
                     $this->endPoint(TRUE),
-                    $this->module(TRUE),
                     $this->context(TRUE));
     }
     /**
      * @return \CODERS\Framework\Request 
      */
     public final function response( ){
-        if( get_class( $this) !== \CODERS\Framework\Request::class ){
-            return false;
+        
+        switch( true ){
+            //do not allow to execute admin controllers out of context
+            case is_admin() && $this->context() !== 'admin':
+                return false;
+            case !is_admin() && $this->context() === 'admin':
+                return false;
         }
+        
         $path = $this->__contextPath();
         if(file_exists($path)){
             require_once $path;
@@ -394,7 +376,7 @@ class Request{
      */
     protected final function importView( $view ){
         return  class_exists('\CODERS\Framework\View') ?
-            \CODERS\Framework\View::create( sprintf('%s.%s.%s',$this->endPoint(),$this->module(),$view) ) :
+            \CODERS\Framework\View::create( sprintf('%s.%s',$this->endPoint(),$view) ) :
                 null;
     }
     /**
