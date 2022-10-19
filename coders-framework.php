@@ -46,11 +46,7 @@ abstract class CodersApp{
      * @return array
      */
     protected function setupAdminMenu(){
-        $menu = self::setupFrameworkMenu();
-        $menu['name'] = $this->endPoint();
-        $menu['title'] = $this->endPoint();
-        $menu['slug'] = $this->endPoint();
-        return $menu;
+        return array();
     }
     /**
      * @return array
@@ -64,6 +60,7 @@ abstract class CodersApp{
                 'capability' => 'administrator',
                 'slug' => 'coders-framework',
                 'icon' => 'dashicons-grid-view',
+                //'children' => array(),
                 'position' => 100,
             );
     }
@@ -305,13 +302,9 @@ abstract class CodersApp{
      * @param String $route 
      */
     protected function response($route = '') {
-        //if (!is_admin()) { }
         $request = \CODERS\Framework\Request::import(
                         $this->__endpoint(),
                         preg_replace('/-/', '.', $route));
-        
-        //var_dump($request);
-        
         return $request->response();
     }
     /**
@@ -367,17 +360,19 @@ abstract class CodersApp{
     /**
      * @param string $endpoint
      */
-    protected static final function __runAdmin( $endpoint ){
-        if( is_admin() && self::exists($endpoint)){
+    private static final function __runAdmin( $endpoint ){
+        if( is_admin()){
             if( $endpoint === 'coders-framework' ){
-                //$appList = self::list(true);
                 require sprintf('%s/admin/admin.php',self::__rootDir());
             }
-            else{
+            elseif(self::exists($endpoint)){
                 $list = self::list(true);
                 $app = $list[$endpoint]['app'];
                 $app->importComponents();
-                var_dump($app);
+                $app->response();
+            }
+            else{
+                self::notice(sprintf('Invalid Endpoint Menu [%s]',$endpoint), 'error');
             }
         }        
     }
@@ -385,13 +380,12 @@ abstract class CodersApp{
      * @param String $endpoint
      * @return boolean
      */
-    protected static final function __runEndpoint( $endpoint ){
+    private static final function __runEndpoint( $endpoint ){
         if ( self::exists($endpoint)) {
             $action = get_query_var( $endpoint , '' );
-            //$setup = self::$_endpoints[$endpoint];
             $call = self::__callable($endpoint);
-            //$setup = self::$_endpoints[$endpoint];
             if( $endpoint === self::class ){
+                //
             }
             elseif(function_exists ($call) ){
                 $call( $action );
@@ -432,11 +426,11 @@ abstract class CodersApp{
             self::registerAdminMenu( self::setupFrameworkMenu() );
 
             foreach (self::list() as $endpoint) {
-                if ( self::__type($endpoint) === 'applicaton' ) {
+                if ( self::__type($endpoint) === 'application' ) {
                     $app = self::load($endpoint, 'application');
                     if( FALSE !== $app ){
-                        self::registerAdminMenu($app->setupAdminMenu());    
                         self::$_endpoints[$endpoint]['app'] = $app;
+                        self::registerAdminMenu($app->setupAdminMenu());
                     }
                 }
             }
@@ -447,29 +441,35 @@ abstract class CodersApp{
      * @return empty
      */
     private static final function registerAdminMenu( array $menu ){
+       if( count( $menu ) === 0 ){
+           return;
+       }
        add_action('admin_menu', function() use( $menu ) {
             $endpoint = $menu['slug'];
             if (strlen($menu['parent']) === 0) {
                 add_menu_page(
                         $menu['name'], $menu['title'],
-                        $menu['capability'], $menu['slug'],
+                        $menu['capability'], $endpoint,
                         function() use($endpoint) { CodersApp::run_admin($endpoint); },
                         $menu['icon'], $menu['position']);
 
-                $children = isset($menu['children']) ? $menu['children'] : array();
-                foreach ($children as $child) {
-                    $child_slug = $endpoint . '-' . $child['slug'];
+                $children = array_key_exists('children', $menu ) ? $menu['children'] : array();
+                foreach ($children as $subMenu) {
+                    $child_slug = $endpoint . '-' . $subMenu['slug'];
                     add_submenu_page(
-                            $menu['name'], $child['name'], $child['title'],
-                            $child['capability'], $child['slug'],
+                            $endpoint,
+                            $subMenu['name'],
+                            $subMenu['title'],
+                            $subMenu['capability'],
+                            $child_slug,
                             function() use( $child_slug ) { CodersApp::run_admin($child_slug); },
-                            $child['position']);
+                            $subMenu['position']);
                 }
             }
             else {
                 add_submenu_page(
                         $menu['parent'], $menu['name'], $menu['title'],
-                        $menu['capability'], $menu['slug'],
+                        $menu['capability'], $endpoint,
                         function() use($endpoint) { CodersApp::run_admin($endpoint); },
                         $menu['position']);
                 }
@@ -482,16 +482,6 @@ abstract class CodersApp{
     public static final function Class( $input ){
         
         return self::__cc($input);
-        
-        if(is_array($input)){
-            //fix this mess ¬_¬
-            return explode(' ',
-                    ucwords(preg_replace('/\~/',' ',(preg_replace('/\s/','',
-                            ucwords(preg_replace('/\-/',' ',
-                                    implode('~', $input ) ) ) ) ) ) ) );
-        }
-
-        return preg_replace('/ /','', ucwords(preg_replace('/-/',' ', $input ))) ;
     }
     /**
      * @author Coder01 <coder01@mnkcoder.com>
@@ -590,14 +580,15 @@ abstract class CodersApp{
      * @param string $class
      */
     public static final function notice( $message , $class = '') {
-        if(is_admin()){
+        printf('<p class="notify is-dimissible %s">%s</p>' ,$class, $message );
+        /*if(is_admin()){
             add_action('admin_notices', function() use( $message , $class ) {
                 printf('<div class="notice is-dimissible %s"><p>%s</p></div>',$class,$message );
             });            
         }
         elseif(self::debug ()){
             printf('<p class="notify %s">%s</p>' ,$class, $message );
-        }
+        }*/
     }
     /**
      * 
@@ -623,7 +614,6 @@ abstract class CodersApp{
                 }
                 elseif(is_admin()){
                     //admin
-                    //CodersApp::initAdminMenu();
                     CodersApp::register_admin('coders-framework');
                 }
                 else{
