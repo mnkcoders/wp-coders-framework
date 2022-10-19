@@ -51,6 +51,19 @@ abstract class CodersApp{
     /**
      * @return array
      */
+    protected function listAdminOptions(){
+        $menu = $this->setupAdminMenu();
+        $output = array($menu['slug']);
+        if(array_key_exists('children', $menu)){
+            foreach( $menu['children'] as $subMenu ){
+                $output[] = $menu['slug'] . '-' . $subMenu['slug'];
+            }
+        }
+        return $output;
+    }
+    /**
+     * @return array
+     */
     protected static final function setupFrameworkMenu(){
         return  array(
                 //framework menu setup
@@ -302,9 +315,20 @@ abstract class CodersApp{
      * @param String $route 
      */
     protected function response($route = '') {
-        $request = \CODERS\Framework\Request::import(
-                        $this->__endpoint(),
-                        preg_replace('/-/', '.', $route));
+        
+        $action = preg_replace('/-/', '.', $route) ;
+        
+        if(is_admin()){
+            if(strlen($route)){
+                $action = 'admin.'. $action;
+            }
+            else{
+                $action = 'admin';
+            }
+        }
+
+        $request = \CODERS\Framework\Request::import($this->__endpoint(), $action);
+        //var_dump($request);
         return $request->response();
     }
     /**
@@ -359,17 +383,22 @@ abstract class CodersApp{
     }
     /**
      * @param string $endpoint
+     * @param string $option
      */
-    private static final function __runAdmin( $endpoint ){
+    private static final function __runAdmin( $endpoint , $option = '' ){
         if( is_admin()){
             if( $endpoint === 'coders-framework' ){
-                require sprintf('%s/admin/admin.php',self::__rootDir());
+                require sprintf('%s/components/views/admin/html/admin.php',self::__rootDir());
             }
             elseif(self::exists($endpoint)){
-                $list = self::list(true);
-                $app = $list[$endpoint]['app'];
-                $app->importComponents();
-                $app->response();
+                $app = self::importAdminApp($endpoint);
+                if( !is_null($app)){
+                    //var_dump($app);
+                    $app->importComponents()->response( $option );
+                }
+                else{
+                    self::notice(sprintf('Invalid Endpoint Boot [%s]',$endpoint), 'error');
+                }
             }
             else{
                 self::notice(sprintf('Invalid Endpoint Menu [%s]',$endpoint), 'error');
@@ -429,12 +458,35 @@ abstract class CodersApp{
                 if ( self::__type($endpoint) === 'application' ) {
                     $app = self::load($endpoint, 'application');
                     if( FALSE !== $app ){
-                        self::$_endpoints[$endpoint]['app'] = $app;
+                        self::registerAdminApp($app);
                         self::registerAdminMenu($app->setupAdminMenu());
                     }
                 }
             }
         }
+    }
+    /**
+     * @param CodersApp $app
+     * @return boolean
+     */
+    private static final function registerAdminApp( CodersApp $app ){
+        $endpoint = $app->endPoint();
+        if( is_admin() && self::exists($endpoint)){
+            self::$_endpoints[$endpoint]['app']=  $app;
+        
+            return true;
+        }
+        return false;
+    }
+    /**
+     * @param string $endpoint
+     * @return \CodersApp
+     */
+    private static final function importAdminApp( $endpoint ){
+        if( self::exists($endpoint) && array_key_exists('app', self::$_endpoints[$endpoint])){
+            return self::$_endpoints[$endpoint]['app'];
+        }
+        return null;
     }
     /**
      * @param array $menu
@@ -455,14 +507,16 @@ abstract class CodersApp{
 
                 $children = array_key_exists('children', $menu ) ? $menu['children'] : array();
                 foreach ($children as $subMenu) {
-                    $child_slug = $endpoint . '-' . $subMenu['slug'];
+                    $option = $subMenu['slug'];
                     add_submenu_page(
                             $endpoint,
                             $subMenu['name'],
                             $subMenu['title'],
                             $subMenu['capability'],
-                            $child_slug,
-                            function() use( $child_slug ) { CodersApp::run_admin($child_slug); },
+                            $endpoint . '-' . $option,
+                            function() use( $endpoint, $option) {
+                                CodersApp::run_admin( $endpoint, $option);
+                            },
                             $subMenu['position']);
                 }
             }

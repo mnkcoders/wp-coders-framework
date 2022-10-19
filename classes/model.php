@@ -124,6 +124,8 @@ abstract class Model{
                 return method_exists($this, $get) ? $this->$get( $arguments ) : $this->value($name);
         }
     }
+    
+    
     /**
      * @return string
      */
