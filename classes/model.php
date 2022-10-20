@@ -32,9 +32,9 @@ abstract class Model{
     /**
      * @param array $data
      */
-    protected function __construct( $endpoint , array $data = array( ) ) {
+    protected function __construct( $route , array $data = array( ) ) {
         
-        $this->_endpoint = is_array($endpoint) ? $endpoint : explode('.', $endpoint);
+        $this->_endpoint = is_array($route) ? $route : explode('.', $route);
         
         if( count( $data ) ){
             $this->import($data);
@@ -148,9 +148,11 @@ abstract class Model{
     protected function __matchEmail( $email ){
          return !preg_match("/^([a-z0-9\+_\-]+)(\.[a-z0-9\+_\-]+)*@([a-z0-9\-]+\.)+[a-z]{2,6}$/ix", $email) ? FALSE : TRUE;
     }
-    
+    /**
+     * @return string
+     */
     public final function endpoint(){
-
+        return $this->_endpoint[0];
     }
     /**
      * @return string

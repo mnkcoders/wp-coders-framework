@@ -22,6 +22,7 @@ abstract class View{
      * @var URL
      */
     const GOOGLE_FONTS_URL = 'https://fonts.googleapis.com/css?family';
+    
 
     /**
      * @var array Scripts del componente
@@ -508,9 +509,14 @@ abstract class View{
      * @return \CODERS\Framework\View
      */
     protected function renderHeader( ){
-        printf('<html %s ><head>',get_language_attributes());
-        wp_head();
-        printf('</head><body class="%s">', implode(' ',  get_body_class(implode(' ', $this->_classes))));
+        if(is_admin()){
+            //load any required script here?
+        }
+        else{
+            printf('<html %s ><head>',get_language_attributes());
+            wp_head();
+            printf('</head><body class="%s">', implode(' ',  get_body_class(implode(' ', $this->_classes))));            
+        }
         return $this;
     }
     /**
@@ -537,8 +543,13 @@ abstract class View{
      * @return \CODERS\Framework\View
      */
     protected function renderFooter(){
-        wp_footer();
-        print '</body></html>';
+        if(is_admin()){
+            //finalize the admin view setup
+        }
+        else{
+            wp_footer();
+            print '</body></html>';            
+        }
         return $this;
     }
 
@@ -547,15 +558,11 @@ abstract class View{
      */
     public function show(){
 
-        if( !is_admin()){
-            $this->prepare()->renderHeader();
-        }
+        $this->prepare()
+                ->renderHeader()
+                ->renderContent()
+                ->renderFooter();
 
-        $this->renderContent();
-
-        if( !is_admin()){
-            $this->renderFooter();
-        }
         return $this;
     }
     

@@ -41,6 +41,7 @@ abstract class CodersApp{
         if( !$admin ){
             $this->importComponents( );        
         }
+
     }
     /**
      * @return array
@@ -101,30 +102,17 @@ abstract class CodersApp{
     }
 
     /** 
+     * @param boolean $framework
      * @return string
      */
-    protected static final function __pluginsDir(){
-        return preg_replace('/\\\\/','/', plugin_dir_path(__DIR__ ) );
-    }
-    /** 
-     * @return string
-     */
-    protected static final function __rootDir(){
-        return preg_replace('/\\\\/','/', plugin_dir_path( __FILE__ ) );
-    }
-    /**
-     * @return string
-     */
-    protected final function __endpoint() {
-        
-        $dir = explode('/', $this->__path());
-        return $dir[ count( $dir ) - 1 ];
+    private static final function __pluginDir( $framework = false ){
+        return preg_replace('/\\\\/','/', plugin_dir_path( $framework ? __FILE__  : __DIR__ ) );
     }
     /**
      * @return string
      */
     public final function __toString() {
-        return $this->__endpoint();
+        return $this->endPoint();
     }
     /**
      * @param string $endpoint
@@ -266,7 +254,7 @@ abstract class CodersApp{
     public static final function appRoot( $endpoint ){
        
         return (array_key_exists($endpoint, self::$_endpoints)) ?
-                self::__pluginsDir() . $endpoint :
+                self::__pluginDir() . $endpoint :
                 '' ;
     }
     /**
@@ -275,7 +263,7 @@ abstract class CodersApp{
     public static function path( $endpoint = '' ){
         return strlen($endpoint) ?
                 self::appRoot($endpoint) :
-                self::__pluginsDir();
+                self::__pluginDir();
     }
     /**
      * Ruta URL de contenido de la aplicación
@@ -294,23 +282,44 @@ abstract class CodersApp{
     private final function importComponents( ){
         
         foreach( $this->_components as $component ){
-            
-            $path = $this->componentPath( $component );
-            
-            if( FALSE !== $path && file_exists($path)){
-                require_once $path;
-            }
-            else{
-                //throw new Exception( sprintf( 'INVALID_COMPONENT [%s]',$component ) );
+            if(strlen($component)){
+                $type = explode('.', $component);
+                $path = '';
+                switch( count($type) ){
+                    case 3:
+                        $path = sprintf('%s%s/components/%s/%s.php',
+                                self::__pluginDir(),
+                                strlen($type[0]) > 0 ? $type[0] : $this->endPoint(),
+                                $type[1], $type[2]);
+                        break;
+                    case 2:
+                        $path = sprintf('%s/components/%s/%s.php',
+                                CODERS_FRAMEWORK_BASE,
+                                $type[0],$type[1]);
+                        break;
+                    case 1:
+                        $path = sprintf('%s/classes/%s.php',
+                                CODERS_FRAMEWORK_BASE,
+                                $type[0]);
+                        break;
+                }
+                if( strlen($path) && file_exists($path)){
+                    require_once $path;
+                }
+                else{
+                    self::notice( sprintf('Invalid component path [%s]',$path),'error');
+                }
             }
         }
         return $this;
     }
     /**
-     * 
      * @return string
      */
-    public final function endPoint(){ return $this->__endpoint(); }
+    public final function endPoint(){
+        $dir = explode('/', $this->__path());
+        return $dir[ count( $dir ) - 1 ];
+    }
     /**
      * @param String $route 
      */
@@ -327,16 +336,9 @@ abstract class CodersApp{
             }
         }
 
-        $request = \CODERS\Framework\Request::import($this->__endpoint(), $action);
+        $request = \CODERS\Framework\Request::import($this->endPoint(), $action);
         //var_dump($request);
         return $request->response();
-    }
-    /**
-     * @return int
-     */
-    public final function countComponents(){
-       
-        return count( $this->_components );
     }
     /**
      * @param string $component
@@ -388,7 +390,7 @@ abstract class CodersApp{
     private static final function __runAdmin( $endpoint , $option = '' ){
         if( is_admin()){
             if( $endpoint === 'coders-framework' ){
-                require sprintf('%s/components/views/admin/html/admin.php',self::__rootDir());
+                require sprintf('%s/components/views/admin/html/admin.php',self::__pluginDir(true));
             }
             elseif(self::exists($endpoint)){
                 $app = self::importAdminApp($endpoint);
@@ -413,8 +415,10 @@ abstract class CodersApp{
         if ( self::exists($endpoint)) {
             $action = get_query_var( $endpoint , '' );
             $call = self::__callable($endpoint);
-            if( $endpoint === self::class ){
-                //
+            if( $endpoint === 'coders-framework' ){
+                if( self::debug()){
+                    require sprintf('%s/components/views/public/html/list.php',self::__pluginDir(true));
+                }
             }
             elseif(function_exists ($call) ){
                 $call( $action );
@@ -546,7 +550,7 @@ abstract class CodersApp{
     private static final function load( $endpoint , $file = 'application'  ){
         if ( strlen($endpoint) ){
             $path = sprintf('%s%s/%s.php' ,
-                    self::__pluginsDir(),
+                    self::__pluginDir(),
                     strtolower( $endpoint ),
                     strlen($file) ? $file : 'application' );
                 
@@ -576,32 +580,6 @@ abstract class CodersApp{
             }
         }
         return self::$_instance;
-    }
-    /**
-     * @param String $component
-     * @return String | boolean
-     */
-    protected final function componentPath( $component ){
-
-        $type = explode('.', $component);
-        
-        switch( count($type) ){
-            case 3:
-                return sprintf('%s%s/components/%s/%s.php',
-                        self::__pluginsDir(),
-                        $type[0] === 'local' ? $this->endPoint() : $type[0],
-                        $type[1], $type[2]);
-            case 2:
-                return sprintf('%s/components/%s/%s.php',
-                        CODERS_FRAMEWORK_BASE,
-                        $type[0],$type[1]);
-            case 1:
-                return sprintf('%s/classes/%s.php',
-                        CODERS_FRAMEWORK_BASE,
-                        $type[0]);
-        }
-            
-        return FALSE;
     }
     /**
      * @param string $plugin
@@ -719,6 +697,4 @@ abstract class CodersApp{
 }
 
 CodersApp::init();
-
-
 
