@@ -27,6 +27,10 @@ abstract class CodersApp{
      */
     private static $_endpoints = array( );
     /**
+     * @var \CODERS\Framework\Strings
+     */
+    private $_strings = null;
+    /**
      * INSTANCE COMPONENTS
      * @var array
      */
@@ -42,6 +46,7 @@ abstract class CodersApp{
             $this->importComponents( );        
         }
 
+        $this->importStrings();
     }
     /**
      * @return array
@@ -83,6 +88,16 @@ abstract class CodersApp{
      */
     protected final function __components(){
         return $this->_components;
+    }
+    /**
+     * @param string $string
+     * @return string
+     */
+    public static final function __( $string ){
+        if( !is_null(self::$_instance) && !is_null(self::$_instance->_strings)){
+            return self::$_instance->_strings->__($string);
+        }
+        return '';
     }
     /**
      * Ruta local de contenido de la aplicación
@@ -278,6 +293,16 @@ abstract class CodersApp{
                 plugin_dir_url(__FILE__) );
     }
     /**
+     * @return \CodersApp
+     */
+    protected final function importStrings(){
+        require_once sprintf('%s/classes/strings.php',self::__pluginDir(true));
+        if(class_exists('\CODERS\Framework\Strings')){
+            $this->_strings = \CODERS\Framework\Strings::create($this->endPoint());
+        }
+        return $this;
+    }
+    /**
      * Preload all core and instance components
      * @return CodersApp
      */
@@ -329,13 +354,8 @@ abstract class CodersApp{
         
         $context = preg_replace('/-/', '.', $route) ;
         
-        if(is_admin()){
-            if(strlen($route)){
-                $context = 'admin.'. $context;
-            }
-            else{
-                $context = 'admin';
-            }
+        if(is_admin() && strlen($route) === 0 ){
+            $context = 'admin';
         }
 
         $request = \CODERS\Framework\Request::import($this->endPoint(), $context);

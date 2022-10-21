@@ -11,7 +11,7 @@ abstract class View{
      * @var \CODERS\Framework\Model
      */
     private $_model = NULL;
-    private $_view = 'default';
+    private $_layout = 'default';
     private $_endpoint = array();
     
     private $_strings = array();
@@ -75,7 +75,7 @@ abstract class View{
             case preg_match(  '/^list_[a-z_]*_options$/' , $name ):
                 return $this->__options(substr($name, 5, strlen($name) - 5 - 8 ) );
             case preg_match(  '/^list_/' , $name ):
-                return $this->__options(substr($name, 5));
+                return $this->__list(substr($name, 5));
             case preg_match(  '/^value_/' , $name ):
                 return $this->value(substr($name, 6));
             case preg_match(  '/^import_/' , $name ):
@@ -105,6 +105,16 @@ abstract class View{
                             is_array($arguments[1]) ? $arguments[1] : array(),
                             count($arguments) > 2 ? $arguments[2] : null ) :
                             '<!-- empty html -->';
+            case preg_match('/^submit_/', $name):
+                $action = substr($name, 7);
+                $content = count($arguments) && is_string($arguments[0])? $arguments[0] : $this->string( $name);
+                $attributes = count($arguments) > 1 ? $arguments[1] : $arguments[0];
+                return $this->__submit($action,$content, is_array( $attributes) ? $attributes : array() );
+            case preg_match('/^button_/', $name):
+                $action = substr($name, 7);
+                $content = count($arguments) && is_string($arguments[0])? $arguments[0] : $this->string( $name);
+                $attributes = count($arguments) > 1 ? $arguments[1] : $arguments[0];
+                return $this->__button($action,$content, is_array( $attributes) ? $attributes : array() );
             case preg_match('/^action_/', $name):
                 $action = substr($name, 7);
                 if( count( $arguments )){
@@ -119,7 +129,7 @@ abstract class View{
             case preg_match(  '/^list_[a-z_]*_options$/' , $name ):
                 return $this->__options(substr($name, 5, strlen($name) - 5 - 8 ) );
             case preg_match(  '/^list_/' , $name ):
-                return $this->__options(substr($name, 5));
+                return $this->__list(substr($name, 5));
             case preg_match(  '/^value_/' , $name ):
                 return $this->value(substr($name, 6));
             case preg_match(  '/^import_/' , $name ):
@@ -133,6 +143,34 @@ abstract class View{
                 return $this->has($name) ? $this->_model->get($get) : '';
         }
         return '';
+    }
+    /**
+     * @param string $name
+     * @param string $content
+     * @param array $args
+     * @return String
+     */
+    protected function __submit( $name , $content = '' , array $args = array()){
+
+        $args['class'] = array_key_exists('class',$args) ?
+            $args['class'] :
+                'button ' . preg_replace('/\./', '-', $name);
+        
+        return Renderer::submit($name, $this->string(is_string($content) ? $content : 'submit_'.$name) , $args );
+    }
+    /**
+     * @param string $name
+     * @param string $content
+     * @param array $args
+     * @return String
+     */
+    protected function __button( $name , $content = '', array $args = array()){
+        
+        $args['class'] = array_key_exists('class',$args) ?
+            $args['class'] :
+                'button ' . preg_replace('/\./', '-', $name);
+
+        return Renderer::button($name, $this->string( is_string($content) ? $content : 'button_'.$name), $args );
     }
     /**
      * @param string $action
@@ -369,15 +407,22 @@ abstract class View{
      * @param string $list
      * @return array
      */
-    protected function list( $list ){
+    protected function __list( $list ){
         
-        return !is_null($this->_model) ? $this->_model->list($list) : array();
+        $call = 'list' . ucfirst($list);
+        
+        if(method_exists($this, $call)){
+            return $this->$call( );
+        }
+        
+        return $this->hasModel() ? $this->_model->list($list) : array();
     }
     /**
      * @param string $name
      * @return string
      */
     protected function label( $name ){
+        return $this->string($name);
         return $this->has($name) ?
                 $this->_model->meta($name,'label',$name) :
                         $this->string($name);
@@ -387,7 +432,8 @@ abstract class View{
      * @return string
      */
     protected function string( $key ){
-        return array_key_exists($key, $this->_strings) ? $this->_strings[$key] : $key;
+        return \CodersApp::__($key);
+        //return array_key_exists($key, $this->_strings) ? $this->_strings[$key] : $key;
     }
 
     
@@ -417,18 +463,18 @@ abstract class View{
      * @param \CODERS\Framework\Model $model
      * @return \CODERS\Framework\View
      */
-    public function setModel( Model $model ){
+    public function setModel( Model $model = null ){
         if(!is_null($model) && is_null($this->_model)){
             $this->_model = $model;
         }
         return $this;
     }
     /**
-     * @param string $display
+     * @param string $layout
      * @return \CODERS\Framework\View
      */
-    public function setDisplay( $display ){
-        $this->_display = $display;
+    public function setLayout( $layout ){
+        $this->_layout = $layout;
         return $this;
     }
     /**
@@ -510,12 +556,12 @@ abstract class View{
      */
     protected function renderHeader( ){
         if(is_admin()){
-            //load any required script here?
+            printf('<!-- [%s] opener --><div class="wrap"><h1>%s</h1>', $this->endpoint(true), get_admin_page_title());
         }
         else{
             printf('<html %s ><head>',get_language_attributes());
             wp_head();
-            printf('</head><body class="%s">', implode(' ',  get_body_class(implode(' ', $this->_classes))));            
+            printf('</head><body class="%s">', implode(' ',  get_body_class(implode(' ', $this->_classes))));
         }
         return $this;
     }
@@ -525,16 +571,16 @@ abstract class View{
      */
     protected function renderContent(){
         
-        printf('<!-- %s start--><div class="container %s">',$this->endpoint(),$this->_view);
+        printf('<div class="container %s %s">',$this->endpoint(),$this->_layout);
         
         if( $this->__debug() && !$this->hasModel()){
-            printf('<p class="info">No model set for view [%s]</p>',$this->endpoint(true));
+            printf('<!--No model set for view [%s] -->',$this->endpoint(true));
         }
         
         //override here
-        $this->__display($this->_view);
+        $this->__display($this->_layout);
         
-        printf('</div><!-- %s ready -->',$this->endpoint());
+        print('</div>');
         
         return $this;
     }
@@ -545,6 +591,7 @@ abstract class View{
     protected function renderFooter(){
         if(is_admin()){
             //finalize the admin view setup
+            printf('</div><!-- [%s] closer -->',$this->endpoint(true) );
         }
         else{
             wp_footer();
@@ -632,6 +679,14 @@ class Renderer{
     const FORM_TYPE_ENCODED = 'application/x-www-form-urlencoded';
     const FORM_TYPE_PLAIN = 'text/plain';
     
+    /**
+     * @param string $string
+     * @return string
+     */
+    public static final function __( $string ){
+        return \CodersApp::__($string);
+    }
+
     /**
      * @param string $name
      * @param string $action
@@ -728,6 +783,39 @@ class Renderer{
         }
         
         return self::html('a', $atts, $label);
+    }
+    /**
+     * <button type="submit"></button>
+     * @param string $name
+     * @param string $content
+     * @param array $atts
+     * @return HTML
+     */
+    public static final function submit( $name, $content = '' , array $atts = array()){
+        
+        $atts['type'] = 'submit';
+        if(!array_key_exists('value', $atts)){
+            $atts['value'] = $name;
+        }
+        
+        return self::button($name , $content, $atts);
+    }
+    /**
+     * <button></button>
+     * @param string $name
+     * @param string $content
+     * @param array $atts
+     * @return HTML
+     */
+    public static function button( $name , $content = '' , array $atts = array( ) ){
+        
+        $atts['name'] = $name;
+        
+        if( !array_key_exists('type', $atts)){
+            $atts['type'] = 'button';
+        }
+        
+        return self::html('button', $atts, strlen($content) ? $content : self::__($name));
     }
     /**
      * <ul></ul>
@@ -1012,6 +1100,8 @@ class Renderer{
         if( !isset($atts['size'])){
             $atts['size'] = 5;
         }
+        
+        $atts['id'] = 'id_'.$name;
         
         $atts['name'] = $name;
         

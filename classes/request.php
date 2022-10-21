@@ -36,8 +36,6 @@ class Request{
         if( count($request) > 1 ){
             $this->_action =  $request[1];
         }
-        var_dump($this);
-        var_dump($route);
     }
     /**
      * @return string
@@ -248,9 +246,10 @@ class Request{
     /**
      * @param string $action
      * @param array $args
+     * @param boolean $admin
      * @return string
      */
-    public static final function createLink( $action , array $args = array() ){
+    public static final function createLink( $action , array $args = array() , $admin = false ){
         $route = explode('.', $action);
         $endpoint_url = get_site_url() . '/' . $route[0];
         if(count($route) > 1 ){
@@ -302,7 +301,6 @@ class Request{
     public static final function ajax( $endpoint , $route = 'default' ){
         return new Request( $endpoint , 'ajax.'.$route );
     }
-
     /**
      * @param string $route
      * @param string $endpoint (target endpoint, self by default)
@@ -313,43 +311,18 @@ class Request{
         return new Request(strlen($endpoint) ? $endpoint : $this->endPoint() , $route );
     }
     /**
-     * @param boolean admin
-     * @return String
-     */
-    private final function __contextPath( $admin = false ){
-            return sprintf('%s/components/controllers/%s.php',
-                    \CodersApp::path($this->endPoint()) ,
-                    $admin && $this->context() !== 'admin' ?
-                        $this->context() . '-admin' :
-                        $this->context() );
-    }
-    /**
-     * @return String
-     */
-    private final function __contextClass( $admin = false ){
-            return sprintf('\CODERS\%s\%sController',
-                    $this->endPoint(TRUE),
-                    $admin && $this->context() !== 'admin' ?
-                        $this->context(true) . 'Admin' :
-                        $this->context(TRUE));
-    }
-    /**
      * @return \CODERS\Framework\Request 
      */
     public final function response( ){
         
-        switch( true ){
-            //do not allow to execute admin controllers out of context
-            case is_admin() && $this->context() !== 'admin':
-                return false;
-            case !is_admin() && $this->context() === 'admin':
-                return false;
+        if( !is_admin() && $this->context() === 'admin' ){
+            return false;
         }
-        
+
         $path = $this->__contextPath(is_admin());
+        $class = $this->__contextClass(is_admin());
         if(file_exists($path)){
             require_once $path;
-            $class = $this->__contextClass(is_admin());
             if(class_exists($class) && is_subclass_of($class, self::class)){
                 $controller = new $class( $this->endPoint() ,$this->route());
                 $action = $this->action();
@@ -363,6 +336,27 @@ class Request{
             \CodersApp::notice(sprintf('Invalid context path %s', $path), 'error');
         }
         return FALSE;
+    }
+    /**
+     * @param boolean admin
+     * @return String
+     */
+    private final function __contextPath( $admin = false ){
+            return sprintf('%s/components/controllers/%s.php',
+                    \CodersApp::path($this->endPoint()) ,
+                    $admin && $this->context() !== 'admin' ?
+                        'admin-' . $this->context() :
+                        $this->context() );
+    }
+    /**
+     * @return String
+     */
+    private final function __contextClass( $admin = false ){
+            return sprintf('\CODERS\%s\%sController',
+                    $this->endPoint(TRUE),
+                    $admin && $this->context() !== 'admin' ?
+                        $this->context(true) . 'Admin' :
+                        $this->context(TRUE));
     }
     /**
      * @param string $model
@@ -379,8 +373,9 @@ class Request{
      */
     protected final function importView( $view ){
         return  class_exists('\CODERS\Framework\View') ?
-            \CODERS\Framework\View::create( sprintf('%s.%s',$this->endPoint(),$view) ) :
-                null;
+            \CODERS\Framework\View::create( sprintf('%s.%s',
+                    $this->endPoint(), $view ) ) :
+                            null;
     }
     /**
      * @param array $args

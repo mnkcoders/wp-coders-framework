@@ -30,6 +30,7 @@ abstract class Model{
         //define model data
     );
     /**
+     * @param string|array $route
      * @param array $data
      */
     protected function __construct( $route , array $data = array( ) ) {
@@ -55,6 +56,13 @@ abstract class Model{
         $ns = explode('\\', get_class($this));
         
         return $ns[ count($ns) - 1 ];
+    }
+    /**
+     * @param string $name
+     * @param mixede $value
+     */
+    public function __set($name, $value) {
+        $this->__setValue($name, $value);
     }
     /**
      * @param string $name
@@ -206,6 +214,15 @@ abstract class Model{
         return $this;
     }
     /**
+     * @param string $created
+     * @param string $updated
+     * @return \CODERS\Framework\Model
+     */
+    protected function defineTimeStamps( $created = 'date_created' , $updated = 'date_updated'){
+        return $this->define($created,self::TYPE_DATETIME,array())
+                ->define($updated,self::TYPE_DATETIME,array());
+    }
+    /**
      * @param \CODERS\Framework\Model $source
      * @return \CODERS\Framework\Model
      */
@@ -270,11 +287,9 @@ abstract class Model{
      * @return \CODERS\Framework\Model
      */
     public function import( array $data ){
-        
         foreach( $data as $element => $value ){
-            $this->setValue($element,$value );
+            $this->__setValue($element, $value);
         }
-        
         return $this;
     }
     /**
@@ -369,6 +384,23 @@ abstract class Model{
         }
         return $this;
     }
+    /**
+     * @param string $element
+     * @param mixed $value
+     * @return \CODERS\Framework\Model
+     */
+    private final function __setValue( $element , $value ){
+        if(strlen($element)){
+            $set = 'set' . ucfirst($element);
+            if(method_exists($this, $set)){
+                $this->$set( $value );
+            }
+            elseif( $this->exists($element)){
+                $this->set($element, 'value', $value);
+            }
+        }
+    }
+
     /**
      * @param string $element
      * @param mixed $value
@@ -499,20 +531,23 @@ abstract class Model{
     public static final function create($model, $data = array()) {
         //$package = self::package($model);
         $route = explode('.', $model);
-        $path = self::__importPath($route);
-        $class = self::__importClass($route);
         try{
-            if(file_exists($path)){
-                require_once $path;
-                if(class_exists($class) && is_subclass_of($class, self::class)){
-                    return new $class( $route,$data );
+            $class = self::__importClass($route);
+            if(!class_exists($class)){
+                $path = self::__importPath($route);
+                if(file_exists($path)){
+                    require_once $path;
                 }
                 else{
-                    throw new \Exception(sprintf('Invalid Model [%s]',$class) );
+                    throw new \Exception(sprintf('Invalid path [%s]',$path) );
                 }
             }
+
+            if(class_exists($class) && is_subclass_of($class, self::class)){
+                return new $class( $route , $data );
+            }
             else{
-                throw new \Exception(sprintf('Invalid path [%s]',$path) );
+                throw new \Exception(sprintf('Invalid Model [%s]',$class) );
             }
         }
         catch (\Exception $ex) {
