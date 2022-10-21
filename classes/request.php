@@ -34,12 +34,10 @@ class Request{
             $this->_context = $request[0];
         }
         if( count($request) > 1 ){
-            $this->_context =  $request[1];
+            $this->_action =  $request[1];
         }
-        if(count($request) > 2){
-            $this->_action =  $request[2];
-        }
-        //var_dump(strval($this));
+        var_dump($this);
+        var_dump($route);
     }
     /**
      * @return string
@@ -315,20 +313,25 @@ class Request{
         return new Request(strlen($endpoint) ? $endpoint : $this->endPoint() , $route );
     }
     /**
+     * @param boolean admin
      * @return String
      */
-    private final function __contextPath(){
+    private final function __contextPath( $admin = false ){
             return sprintf('%s/components/controllers/%s.php',
                     \CodersApp::path($this->endPoint()) ,
-                    $this->context() );
+                    $admin && $this->context() !== 'admin' ?
+                        $this->context() . '-admin' :
+                        $this->context() );
     }
     /**
      * @return String
      */
-    private final function __contextClass(){
+    private final function __contextClass( $admin = false ){
             return sprintf('\CODERS\%s\%sController',
                     $this->endPoint(TRUE),
-                    $this->context(TRUE));
+                    $admin && $this->context() !== 'admin' ?
+                        $this->context(true) . 'Admin' :
+                        $this->context(TRUE));
     }
     /**
      * @return \CODERS\Framework\Request 
@@ -343,10 +346,10 @@ class Request{
                 return false;
         }
         
-        $path = $this->__contextPath();
+        $path = $this->__contextPath(is_admin());
         if(file_exists($path)){
             require_once $path;
-            $class = $this->__contextClass();
+            $class = $this->__contextClass(is_admin());
             if(class_exists($class) && is_subclass_of($class, self::class)){
                 $controller = new $class( $this->endPoint() ,$this->route());
                 $action = $this->action();

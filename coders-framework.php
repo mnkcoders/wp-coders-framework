@@ -210,7 +210,9 @@ abstract class CodersApp{
                 if( count($arguments )){
                     $call = '__run' . self::__cc(substr($name ,4 , strlen($name)-4 )) ;
                     if(method_exists(self::class, $call)){
-                        return static::$call( $arguments[0] );
+                        return static::$call(
+                                $arguments[0] ,
+                                count($arguments) > 1 ? $arguments[1] : '' );
                     }
                 }
                 return false;
@@ -325,18 +327,18 @@ abstract class CodersApp{
      */
     protected function response($route = '') {
         
-        $action = preg_replace('/-/', '.', $route) ;
+        $context = preg_replace('/-/', '.', $route) ;
         
         if(is_admin()){
             if(strlen($route)){
-                $action = 'admin.'. $action;
+                $context = 'admin.'. $context;
             }
             else{
-                $action = 'admin';
+                $context = 'admin';
             }
         }
 
-        $request = \CODERS\Framework\Request::import($this->endPoint(), $action);
+        $request = \CODERS\Framework\Request::import($this->endPoint(), $context);
         //var_dump($request);
         return $request->response();
     }
@@ -365,10 +367,10 @@ abstract class CodersApp{
     }
     /**
      * @param string $endpoint
-     * @param array $input
+     * @param array $context
      * @return array
      */
-    private static final function __runAjax( $endpoint ){
+    private static final function __runAjax( $endpoint , $context = '' ){
         if( self::exists($endpoint)){
             $setup = self::$_endpoints[$endpoint];
             if( $setup['ajax'] ){
@@ -385,9 +387,9 @@ abstract class CodersApp{
     }
     /**
      * @param string $endpoint
-     * @param string $option
+     * @param string $context
      */
-    private static final function __runAdmin( $endpoint , $option = '' ){
+    private static final function __runAdmin( $endpoint , $context = '' ){
         if( is_admin()){
             if( $endpoint === 'coders-framework' ){
                 require sprintf('%s/components/views/admin/html/admin.php',self::__pluginDir(true));
@@ -396,7 +398,7 @@ abstract class CodersApp{
                 $app = self::importAdminApp($endpoint);
                 if( !is_null($app)){
                     //var_dump($app);
-                    $app->importComponents()->response( $option );
+                    $app->importComponents()->response( $context );
                 }
                 else{
                     self::notice(sprintf('Invalid Endpoint Boot [%s]',$endpoint), 'error');
@@ -409,9 +411,10 @@ abstract class CodersApp{
     }
     /**
      * @param String $endpoint
+     * @param String $context
      * @return boolean
      */
-    private static final function __runEndpoint( $endpoint ){
+    private static final function __runEndpoint( $endpoint , $context = '' ){
         if ( self::exists($endpoint)) {
             $action = get_query_var( $endpoint , '' );
             $call = self::__callable($endpoint);
@@ -511,15 +514,15 @@ abstract class CodersApp{
 
                 $children = array_key_exists('children', $menu ) ? $menu['children'] : array();
                 foreach ($children as $subMenu) {
-                    $option = $subMenu['slug'];
+                    $context = $subMenu['slug'];
                     add_submenu_page(
                             $endpoint,
                             $subMenu['name'],
                             $subMenu['title'],
                             $subMenu['capability'],
-                            $endpoint . '-' . $option,
-                            function() use( $endpoint, $option) {
-                                CodersApp::run_admin( $endpoint, $option);
+                            $endpoint . '-' . $context,
+                            function() use( $endpoint, $context) {
+                                CodersApp::run_admin( $endpoint, $context);
                             },
                             $subMenu['position']);
                 }
