@@ -592,14 +592,17 @@ final class Query {
      */
     public final function prefix(){
         global $table_prefix;
-        return $table_prefix . $this->_endpoint;
+        return $table_prefix . preg_replace('/\-/', '_',  $this->_endpoint );
     }
     /**
      * @param string $table
+     * @param bool $quote
      * @return string
      */
-    public final function table( $table ){
-        return sprintf('%s_%s',$this->prefix(),$table);
+    public final function table( $table , $quote = false ){
+        return $quote ?
+                sprintf('`%s_%s`',$this->prefix(),$table):
+                sprintf('%s_%s',$this->prefix(),$table);
     }
     
     /**
@@ -761,19 +764,173 @@ final class Query {
         $db = self::db();
 
         $result = $db->get_results($SQL_QUERY, ARRAY_A );
-        //var_dump($SQL_QUERY);
         
-        if( strlen($index) ){
-            $output = array();
-            foreach( $result as $row ){
-                if( isset( $row[$index])){
-                    $output[ $row[ $index ] ] = $row;
+        if( !is_null($result) && count( $result ) ){
+            
+            if( strlen($index) ){
+                $output = array();
+                foreach( $result as $row ){
+                    if( isset( $row[$index])){
+                        $output[ $row[ $index ] ] = $row;
+                    }
                 }
+                return $output;
             }
-            return $output;
-        }
 
-        return ( count($result)) ? $result : array();
+            return $result;
+        }
+        return array();
+    }
+    /**
+     * @param string $table
+     * @return boolean
+     */
+    private final function __tableExists( $table ){
+        $parsed = $this->table($table);
+        //$this->db()->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table_name ) );
+        $query = $this->db()->prepare( 'SHOW TABLES LIKE %s',$parsed );
+        $result = $this->db()->get_var($query);
+        return !is_null($result) && $result === $parsed;
+    }
+    /**
+     * @param string $table
+     * @param array $data
+     * @return array
+     */
+    private final function __updateTable( $table , array $data ){
+        
+        return array();
+        
+        $elements = array();
+        
+        foreach( $data as $column => $def ){
+            if( is_array($def)){
+                $type = array_key_exists('type', $def) ? $def['type'] : 'text';
+                $size = array_key_exists('size', $def) ? $def['size'] : 8;
+                $index = array_key_exists('index', $def) && $def['index'];
+                $required = array_key_exists('required', $def) && $def['required'];
+                $default = array_key_exists('default', $def) ? $def['default'] : '';
+                $content = array( '`' . $column . '`' );
+
+                if(strlen($default)){ $content[] = $default === 'CURRENT_TIMESTAMP' ? sprintf("DEFAULT %s",$default) : sprintf("DEFAULT '%s'",$default); }
+                if( $required ){ $content[] = 'NOT NULL'; }
+                if( $index ){ $content[] = 'PRIMARY KEY'; }
+                $elements[] = implode(' ', $content);
+            }
+            elseif(is_string ($def)){
+                $elements[] = $def;
+            }
+        }
+        
+        return $elements;
+    }
+    /**
+     * @param string $table
+     * @param array $data
+     * @return array
+     */
+    private final function __createTable( $table , array $data ){
+
+        $elements = array();
+        foreach( $data as $column => $def ){
+            if( is_array($def)){
+                $type = array_key_exists('type', $def) ? $def['type'] : 'text';
+                $size = array_key_exists('size', $def) ? $def['size'] : 8;
+                $index = array_key_exists('index', $def) && $def['index'];
+                $required = array_key_exists('required', $def) && $def['required'];
+                $default = array_key_exists('default', $def) ? $def['default'] : '';
+                $content = array( '`' . $column . '`' );
+                switch( $type ){
+                    case 'incremental':
+                        $content[] = sprintf('INT(%s) AUTO_INCREMENT',$size);
+                        break;
+                    case 'number':
+                        $content[] = sprintf('INT(%s)',$size);
+                        break;
+                    case 'date_time':
+                        $content[] = sprintf('DATETIME');
+                        break;
+                    case 'date':
+                        $content[] = sprintf('DATE');
+                        break;
+                    case 'time':
+                        $content[] = sprintf('TIME');
+                        break;
+                    case 'timestamp':
+                        $content[] = sprintf('TIMESTAMP');
+                        break;
+                    case 'text':
+                    default:
+                        $content[] = sprintf('VARCHAR(%s)',$size);
+                        break;
+                }
+                if(strlen($default)){ $content[] = $default === 'CURRENT_TIMESTAMP' ? sprintf("DEFAULT %s",$default) : sprintf("DEFAULT '%s'",$default); }
+                if( $required ){ $content[] = 'NOT NULL'; }
+                if( $index ){ $content[] = 'PRIMARY KEY'; }
+                $elements[] = implode(' ', $content);
+            }
+            elseif(is_string ($def)){
+                $elements[] = $def;
+            }
+        }
+        return $elements;
+    }
+
+    /**
+     * @param array $schema TABLE type[text,number,incremental] size[8], index[false] required[false]
+     * @return boolean
+     */
+    public final function __install( array $schema = array()){
+        
+        require_once( sprintf( '%swp-admin/includes/upgrade.php' , ABSPATH ) );
+
+        $sql = array();
+        
+        foreach( $schema as $table => $data ){
+
+            if( $this->__tableExists($table)){
+                printf('<p>%s already exists</p>',$this->table($table));
+            }
+            else{
+                $create = $this->__createTable($table, $data);
+                $sql[] = sprintf('CREATE TABLE %s ( %s ) %s',
+                        $this->table($table,true),
+                        implode(' , ',$create),
+                        $this->db()->get_charset_collate());
+                $this->__createTable($table, $data);
+            }
+        }
+        
+        if( count( $sql ) ){
+            //run each sql
+            $counter = 0;
+            foreach( $sql as $query ){
+                $result = dbDelta($query);
+                \CodersApp::notice(json_encode($result));
+                //print($query);
+                //var_dump($result);
+                $counter++;
+            }
+            return $counter === count( $sql );
+        }
+        
+        return false;
+    }
+    /**
+     * @param array $tables
+     * @return boolean
+     */
+    public final function __uninstall( array $tables){
+        $remove = array();
+        foreach( $tables as $table ){
+            $remove[] = $this->table($table);
+        }
+        $sql = sprintf('DROP TABLE IF EXISTS %s', implode(' ', $remove));
+        $result = $this->db()->query($sql);
+        if( $result ){
+            \CodersApp::notice('tables removed ' . implode(', ', $remove));
+        }
+        return $result;
     }
 }
 

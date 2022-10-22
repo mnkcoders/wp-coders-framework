@@ -23,25 +23,32 @@ class Request{
 
     /**
      * @param string $endpoint
-     * @param string $route
+     * @param string $request
      */
-    protected function __construct( $endpoint , $route = '' ) {
+    protected function __construct( $endpoint , $request = '' ) {
         $this->_ts = time();
         $this->_endpoint = $endpoint;
         
-        $request = explode('.', strlen($route) ? $route : '' );
-        if( strlen($request[0]) ){
-            $this->_context = $request[0];
+        $route = explode('.', strlen($request) ? $request : '' );
+        if( strlen($route[0]) ){
+            $this->_context = $route[0];
         }
-        if( count($request) > 1 ){
-            $this->_action =  $request[1];
+        if( count($route) > 1 ){
+            $this->_action =  $route[1];
+        }
+        elseif(is_admin()){
+            $this->_action = $this->get('action', 'default', INPUT_GET);
         }
     }
     /**
      * @return string
      */
     public function __toString() {
-        return sprintf('[%s] %s', $this->_ts , $this->route( TRUE ) );
+        return sprintf('%s[%s] %s.%s',
+                get_class($this),
+                $this->_ts ,
+                $this->endPoint() ,
+                $this->action( TRUE ) );
     }
     /**
      * @param string $name
@@ -52,9 +59,11 @@ class Request{
         
         $call = sprintf('%s_action',$name);
         
+        $data = count($arguments) ? $arguments[0] : array();
+        
         return method_exists($this, $call) ?
-                $this->$call( $arguments ) : 
-                $this->error_action( $arguments );
+                $this->$call( $data ) : 
+                $this->error_action( $data );
     }
     /**
      * Obtiene un valor de la Request
@@ -88,7 +97,7 @@ class Request{
      * @param int $type
      * @return array
      */
-    public final function list( $type = self::INPUT_REQUEST ){
+    public final function input( $type = self::INPUT_REQUEST ){
         
         switch( $type ){
             case self::INPUT_REQUEST:
@@ -105,11 +114,11 @@ class Request{
      * @param $full
      * @return string
      */
-    public final function route( $full = FALSE ){
+    /*public final function route( $full = FALSE ){
         return $full ?
             $this->endPoint() . '.' . $this->action( true ) :
             $this->action( true ) ;
-    }
+    }*/
 
     /**
      * Retorna un valor numérico
@@ -251,8 +260,19 @@ class Request{
      */
     public static final function createLink( $action , array $args = array() , $admin = false ){
         $route = explode('.', $action);
-        $endpoint_url = get_site_url() . '/' . $route[0];
-        if(count($route) > 1 ){
+        
+        $endpoint_url = $admin ?
+                admin_url():
+                get_site_url() . '/' . $route[0];
+        
+        if($admin){
+            $endpoint_url .= 'admin.php';
+            $args['page'] = count($route) > 1 ? $route[0] . '-'. $route[1]: $route[0];
+            if(count($route) > 2 ){
+                $args['action'] = $route[2];
+            }
+        }
+        elseif(count($route) > 1 ){
             for( $i = 1 ; $i < count( $route ) ; $i++ ){
                 $endpoint_url .= ($i === 1 ) ? '/' . $route[$i] : '-' .$route[$i];
             }
@@ -311,9 +331,18 @@ class Request{
         return new Request(strlen($endpoint) ? $endpoint : $this->endPoint() , $route );
     }
     /**
+     * Write the response/output
+     * @return boolean
+     */
+    public final function response(){
+        $action = $this->action();
+        //var_dump($this);
+        return $this->$action( $this->input( ) );
+    }
+    /**
      * @return \CODERS\Framework\Request 
      */
-    public final function response( ){
+    public final function route( ){
         
         if( !is_admin() && $this->context() === 'admin' ){
             return false;
@@ -324,9 +353,10 @@ class Request{
         if(file_exists($path)){
             require_once $path;
             if(class_exists($class) && is_subclass_of($class, self::class)){
-                $controller = new $class( $this->endPoint() ,$this->route());
-                $action = $this->action();
-                return $controller->$action( $this->list());
+                return new $class( $this->endPoint() ,$this->action(true));
+                //$controller = new $class( $this->endPoint() ,$this->action(true));
+                //$action = $this->action();
+                //return $controller->$action( $this->list());
             }
             elseif (\CodersApp::debug()) {
                 \CodersApp::notice(sprintf('Invalid context class %s', $class), 'error');
@@ -335,7 +365,7 @@ class Request{
         elseif (\CodersApp::debug()) {
             \CodersApp::notice(sprintf('Invalid context path %s', $path), 'error');
         }
-        return FALSE;
+        return $this;
     }
     /**
      * @param boolean admin
@@ -398,7 +428,7 @@ class Request{
         }
         else{
             return $this->error_action( array(
-                'error' => sprintf('invalid view for [%s]', $this->route(true)),
+                'error' => sprintf('invalid view for [%s]', strval($this)),
             ) );
         }
 

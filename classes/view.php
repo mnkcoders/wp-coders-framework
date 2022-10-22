@@ -70,6 +70,10 @@ abstract class View{
         switch( true ){
             case $name === 'debug':
                 return $this->__debug();
+            case preg_match('/^action_/', $name):
+                return $this->__actionUrl(substr($name, 7, strlen($name)-7));
+            case preg_match('/^admin_action_/', $name):
+                return $this->__actionUrl(substr($name, 13, strlen($name)-13),true);
             case preg_match('/^input_/', $name):
                 return $this->__input(substr($name, 6));
             case preg_match(  '/^list_[a-z_]*_options$/' , $name ):
@@ -172,6 +176,28 @@ abstract class View{
 
         return Renderer::button($name, $this->string( is_string($content) ? $content : 'button_'.$name), $args );
     }
+    /**
+     * @param string $action
+     * @param boolean $admin
+     * @return string|URL
+     */
+    protected function __actionUrl( $action , $admin  =false ){
+        
+        $route = is_array($action) ? $action : explode('_', $action);
+
+   
+        if( count($route) < 2 ){
+            array_unshift($route, $admin ? 'admin' : 'main' );
+        }
+        
+        array_unshift($route,$this->endpoint());
+        
+        return \CODERS\Framework\Request::createLink(
+                implode('.', $route),
+                array(),
+                $admin);
+    }
+
     /**
      * @param string $action
      * @param string $label

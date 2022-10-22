@@ -352,15 +352,11 @@ abstract class CodersApp{
      */
     protected function response($route = '') {
         
-        $context = preg_replace('/-/', '.', $route) ;
-        
-        if(is_admin() && strlen($route) === 0 ){
-            $context = 'admin';
-        }
+        $context = is_admin() && strlen($route) === 0 ? 'admin' : preg_replace('/-/', '.', $route);
 
-        $request = \CODERS\Framework\Request::import($this->endPoint(), $context);
-        //var_dump($request);
-        return $request->response();
+        \CODERS\Framework\Request::import(
+                $this->endPoint(),
+                $context)->route()->response();
     }
     /**
      * @param string $component
