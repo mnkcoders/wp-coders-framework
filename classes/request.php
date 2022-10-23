@@ -389,13 +389,24 @@ class Request{
                         $this->context(TRUE));
     }
     /**
+     * @param string $provider
+     * @param array $data
+     * @return \CODERS\Framework\Provider
+     */
+    protected final function importProvider( $provider , array $data = array( ) ){
+        return  class_exists('\CODERS\Framework\Provider') ?
+                \CODERS\Framework\Provider::create($provider, $data) :
+                        null;
+    }
+    /**
      * @param string $model
+     * @param array $data
      * @return \CODERS\Framework\Model | boolean
      */
-    protected final function importModel( $model ){
+    protected final function importModel( $model , array $data = array() ){
         return  class_exists('\CODERS\Framework\Model') ?
-            \CODERS\Framework\Model::create( sprintf('%s.%s',$this->endPoint(),$model) ) :
-                null;
+                \CODERS\Framework\Model::create( sprintf('%s.%s',$this->endPoint(),$model) , $data ) :
+                        null;
     }
     /**
      * @param string $view

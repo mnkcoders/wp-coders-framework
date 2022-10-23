@@ -19,9 +19,9 @@ abstract class CodersApp{
      */
     private static $_debug = TRUE;
     /**
-     * @var \CodersApp | boolean
+     * @var \CodersApp
      */
-    private static $_instance = FALSE;
+    private static $_instance = null;
     /**
      * @var array
      */
@@ -280,7 +280,7 @@ abstract class CodersApp{
     public static function path( $endpoint = '' ){
         return strlen($endpoint) ?
                 self::appRoot($endpoint) :
-                self::__pluginDir();
+                self::__pluginDir(true);
     }
     /**
      * Ruta URL de contenido de la aplicación
@@ -292,6 +292,19 @@ abstract class CodersApp{
                 sprintf('/plugins/%s/', $this->endPoint() ),
                 plugin_dir_url(__FILE__) );
     }
+    /**
+     * @param string $endpoint
+     * @return string
+     */
+    public static final function storage( $endpoint = '' ){
+        if( strlen($endpoint) === 0 && !is_null(self::$_instance)){
+            $endpoint = self::$_instance->endPoint();
+        }
+        return sprintf('%swp-content/uploads/coders/%s',
+                preg_replace('/\\\\/','/',ABSPATH ),
+                strlen($endpoint) ? $endpoint . '/' : '' );
+    }
+
     /**
      * @return \CodersApp
      */
@@ -389,11 +402,13 @@ abstract class CodersApp{
     private static final function __runAjax( $endpoint , $context = '' ){
         if( self::exists($endpoint)){
             $setup = self::$_endpoints[$endpoint];
-            if( $setup['ajax'] ){
-                $app = self::load($endpoint, 'application' );
+            if( $setup['ajax'] && is_null(self::$_instance)){
+                self::$_instance = self::load($endpoint, 'application' );
                 $input = filter_input_array(INPUT_POST);
                 $route = !is_null($input) ? $input['route'] : 'default';
-                $response = $app !== false ? $app->__ajax( $route , !is_null($input) ? $input : array() ) : array( 'invalid_endpoint' => $endpoint);
+                $response = !is_null(self::$_instance) ?
+                        self::$_instance->__ajax( $route , !is_null($input) ? $input : array() ) :
+                                array( 'invalid_endpoint' => $endpoint);
 
                 print json_encode($response);
                 //wp_die();
@@ -442,14 +457,17 @@ abstract class CodersApp{
             elseif(function_exists ($call) ){
                 $call( $action );
             }
-            else{
-                $app = self::load($endpoint,'application');
-                if( false !== $app ){
-                    $app->response($action);
+            elseif(is_null(self::$_instance)){
+                self::$_instance = self::load($endpoint,'application');
+                if( !is_null(self::$_instance) ){
+                    self::$_instance->response($action);
                 }
                 elseif(self::debug()){
                     printf('<p>Invalid App loader %s</p>',$endpoint);
                 }
+            }
+            else{
+                var_dump(self::$_instance);
             }
         }
     }
@@ -575,7 +593,7 @@ abstract class CodersApp{
                 
             if(file_exists($path)){
                 require_once($path);
-                return self::create($endpoint );
+                return self::create($endpoint);
             }
             else{
                 self::notice(sprintf('invalid endpoint path [%s]',$path));
@@ -587,18 +605,17 @@ abstract class CodersApp{
         return FALSE;
     }
     /**
-     * @author Coder01 <coder01@mnkcoder.com>
      * @param string $endpoint
-     * @return \CodersApp|Bool
+     * @return \CodersApp
      */
-    private static final function create( $endpoint){
-        if ( !is_null(self::$_instance) && strlen($endpoint) ){
+    private static final function create( $endpoint ){
+        if(strlen($endpoint)){
             $class = self::Class($endpoint);
             if (class_exists($class) && is_subclass_of($class, self::class, TRUE)) {
-                self::$_instance = new $class( is_admin()  );
+                return new $class( is_admin() ) ;
             }
         }
-        return self::$_instance;
+        return null;
     }
     /**
      * @param string $plugin
