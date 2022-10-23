@@ -3,6 +3,10 @@
 defined('ABSPATH') or die;
 
 class Uploader extends \CODERS\Framework\Provider{
+    /**
+     * @var array
+     */
+    private $_collection = array();
     
     /**
      * 
@@ -59,16 +63,18 @@ class Uploader extends \CODERS\Framework\Provider{
         }
         return $list;
     }
-    
+    /**
+     * @param string $input
+     * @return boolean|$this
+     * @throws \CODERS\Framework\Providers\Uploader
+     */
     public final function upload( $input ){
         
         if( !$this->exists() ){
             \CodersApp::notice('Invalid storage path ' . $this->storage());
             return false;
         }
-        
-        $collection = array();
-        
+
         foreach( self::importMeta($input) as $upload ) {
             try{
                 switch( $upload['error'] ){
@@ -98,8 +104,9 @@ class Uploader extends \CODERS\Framework\Provider{
                     $upload['path'] = $this->path($upload['id']);
                     if( file_put_contents($upload['path'], $buffer) ){
                         $upload['size'] = filesize($upload['path']);
-                        $upload['storage'] = $this->storage;
-                        $collection[ $upload['id'] ] = $upload;
+                        //$upload['storage'] = $this->storage;
+                        $this->_collection[ $upload['id'] ] = $upload;
+                        //$collection[ $upload['id'] ] = $upload;
                     }
                 }
                 else{
@@ -111,8 +118,21 @@ class Uploader extends \CODERS\Framework\Provider{
                 \CodersApp::notice( $ex->getMessage() );
             }
         }
-        
-        return $collection;
+        return $this;
+    }
+    /**
+     * @param function $callable
+     * @return array
+     */
+    public final function each( callable $callable ){
+        $output = array();
+        if(is_callable($callable)){
+            foreach( $this->_collection as $id => $meta ){
+                $meta['storage'] = $this->storage;
+                $output[$id] = $callable( $meta );
+            }
+        }
+        return $output;
     }
 }
 
