@@ -286,15 +286,20 @@ abstract class CodersApp{
     }
     /**
      * @param string $endpoint
+     * @param bool $asUrl
      * @return string
      */
-    public static final function storage( $endpoint = '' ){
+    public static final function storage( $endpoint = '' , $asUrl = false ){
         if( strlen($endpoint) === 0 && !is_null(self::$_instance)){
             $endpoint = self::$_instance->endPoint();
         }
+        $route = preg_replace('/\./', '/', $endpoint);
+        $path = $asUrl ?
+                get_site_url() . '/' :
+                preg_replace('/\\\\/','/',ABSPATH );
         return sprintf('%swp-content/uploads/coders/%s',
-                preg_replace('/\\\\/','/',ABSPATH ),
-                strlen($endpoint) ? $endpoint . '/' : '' );
+                $path,
+                strlen($route) ? $route . '/' : '' );
     }
     /**
      * Preload all core and instance components

@@ -548,6 +548,12 @@ abstract class View{
         }
     }
     /**
+     * @return string
+     */
+    protected function getAdminPageTitle(){
+        return get_admin_page_title();
+    }
+    /**
      * Setup all view contents
      * @return \CODERS\Framework\View
      */
@@ -597,7 +603,7 @@ abstract class View{
      */
     protected function renderHeader( ){
         if(is_admin()){
-            printf('<!-- [%s] opener --><div class="wrap"><h1>%s</h1>', $this->endpoint(true), get_admin_page_title());
+            printf('<!-- [%s] opener --><div class="wrap"><h1>%s</h1>', $this->endpoint(true), $this->getAdminPageTitle());
         }
         else{
             printf('<html %s ><head>',get_language_attributes());

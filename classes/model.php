@@ -49,17 +49,28 @@ abstract class Model{
      * @return string
      */
     public function __toString() {
+        return $this->__model();
         return $this->__class();
     }
     /**
      * Model Class Name
+     * @param bool $full
      * @return string
      */
-    protected final function __class(){
+    protected static final function __class( $full = false ){
         
-        $ns = explode('\\', get_class($this));
-        
+        if( $full ){
+            return get_called_class();
+        }
+
+        $ns = explode('\\', get_called_class() );
         return $ns[ count($ns) - 1 ];
+    }
+    /**
+     * @return string
+     */
+    protected static final function __model(){
+        return strtolower( preg_replace('/Model$/', '', self::__class()));
     }
     /**
      * @param string $name
@@ -92,8 +103,7 @@ abstract class Model{
                 return $this->get($label, 'label', $label );
             case preg_match(  '/^list_/' , $name ):
                 //RETURN LIST
-                $list = preg_replace('/_/', '', $name);
-                return method_exists($this, $list) ? $this->$list() : array();
+                return $this->list(substr($name, 5));
             case preg_match(  '/^error_/' , $name ):
                 //RETURN LIST
                 $element = substr($name, strlen('error_'));
@@ -122,7 +132,7 @@ abstract class Model{
                 return method_exists($this, $is) ? $this->$is( $arguments ) : FALSE;
             case preg_match(  '/^list_/' , $name ):
                 //RETURN LIST
-                return $this->list($name);
+                return $this->list(substr($name, 5));
             case preg_match(  '/^error_/' , $name ):
                 if( count( $arguments )){
                     $element = substr($name, strlen('error_'));
@@ -476,7 +486,33 @@ abstract class Model{
         }
         return $updated;
     }
-
+    /**
+     * @param string $table
+     * @param array $filters
+     * @param callable $callback
+     * @return array
+     */
+    public static function load( $table = '' , array $filters = array() ){
+        return self::db()->select(
+                strlen($table) ? $table : self::__model(),
+                '*' ,
+                $filters );
+    }
+    /**
+     * @param array $filters
+     * @return \CODERS\Framework\Model[]
+     */
+    public static function fill( array $filters = array() ){
+        $class = self::__class(true);
+        $table = self::__model();
+        $output = array();
+        $input = self::load($table,$filters);
+        foreach( $input as $data ){
+            //var_dump($data);
+            $output[] = new $class( '' , $data );
+        }
+        return $output;
+    }
     /**
      * @return \CODERS\Framework\Query
      */
@@ -883,6 +919,9 @@ final class Query {
                         break;
                     case 'timestamp':
                         $content[] = sprintf('TIMESTAMP');
+                        break;
+                    case 'longtext':
+                        $content[] = 'LONGTEXT';
                         break;
                     case 'text':
                     default:

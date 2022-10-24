@@ -4,8 +4,6 @@ defined('ABSPATH') or die;
 
 /**
  * Request and Response manager
- * 
- * 
  */
 class Request{
     
@@ -309,7 +307,6 @@ class Request{
         
         return (new Request(strlen($endpoint) ? $endpoint : $this->endPoint() , $route ))->route();
     }
-
     /**
      * @return \CODERS\Framework\Response 
      */
@@ -326,14 +323,12 @@ class Request{
  * 
  */
 class Response extends Request{
-    
     /**
      * @var array
      */
     private $_components = array(
         'strings'
     );    
-    
     /**
      * @param string $endpoint
      * @param string $request
@@ -422,7 +417,6 @@ class Response extends Request{
         }
         return new Response($request->endPoint(),$request->context());
     }
-
     /**
      * @param string $endpoint
      * @param string $context
