@@ -20,9 +20,6 @@ class Request{
     private $_context = 'main';
     private $_action = 'default';
     private $_ts;
-    private $_components = array(
-        'strings'
-    );
 
     /**
      * @param string $endpoint
@@ -42,9 +39,6 @@ class Request{
         elseif(is_admin()){
             $this->_action = $this->get('action', 'default', INPUT_GET);
         }
-        
-        //import all endpoint required components by request
-        $this->preload();
     }
     /**
      * @return string
@@ -55,21 +49,6 @@ class Request{
                 $this->_ts ,
                 $this->endPoint() ,
                 $this->action( TRUE ) );
-    }
-    /**
-     * @param string $name
-     * @param array $arguments
-     * @return bool
-     */
-    public final function __call($name, $arguments) {
-        
-        $call = sprintf('%s_action',$name);
-        
-        $data = count($arguments) ? $arguments[0] : array();
-        
-        return method_exists($this, $call) ?
-                $this->$call( $data ) : 
-                $this->error_action( $data );
     }
     /**
      * Obtiene un valor de la Request
@@ -188,7 +167,7 @@ class Request{
      * @param bool $cc Camel Case
      * @return String
      */
-    private final function context( $cc = FALSE ){ return $cc ? ucfirst($this->_context) : $this->_context; }
+    public final function context( $cc = FALSE ){ return $cc ? ucfirst($this->_context) : $this->_context; }
     /**
      * @param bool $cc Camel Case
      * @return String
@@ -328,44 +307,51 @@ class Request{
      */
     public final function redirect( $route  = '' , $endpoint = '' ){
         
-        return new Request(strlen($endpoint) ? $endpoint : $this->endPoint() , $route );
+        return (new Request(strlen($endpoint) ? $endpoint : $this->endPoint() , $route ))->route();
     }
+
     /**
-     * Write the response/output
-     * @return boolean
-     */
-    public final function response(){
-        $action = $this->action();
-        //var_dump($this);
-        return $this->$action( $this->input( ) );
-    }
-    /**
-     * @return \CODERS\Framework\Request 
+     * @return \CODERS\Framework\Response 
      */
     public final function route( ){
         
         if( !is_admin() && $this->context() === 'admin' ){
             return false;
         }
-
-        $path = $this->__contextPath(is_admin());
-        $class = $this->__contextClass(is_admin());
-        if(file_exists($path)){
-            require_once $path;
-            if(class_exists($class) && is_subclass_of($class, self::class)){
-                return new $class( $this->endPoint() ,$this->action(true));
-                //$controller = new $class( $this->endPoint() ,$this->action(true));
-                //$action = $this->action();
-                //return $controller->$action( $this->list());
-            }
-            elseif (\CodersApp::debug()) {
-                \CodersApp::notify(sprintf('Invalid context class %s', $class), 'error');
-            }
-        }
-        elseif (\CodersApp::debug()) {
-            \CodersApp::notify(sprintf('Invalid context path %s', $path), 'error');
-        }
-        return $this;
+        
+        return Response::create($this, is_admin());
+    }
+}
+/**
+ * 
+ */
+class Response extends Request{
+    
+    /**
+     * @var array
+     */
+    private $_components = array(
+        'strings'
+    );    
+    
+    /**
+     * @param string $endpoint
+     * @param string $request
+     */
+    protected function __construct($endpoint, $request = '') {
+        
+        parent::__construct($endpoint, $request);
+        //import all endpoint required components by request
+        $this->preload();
+    }
+    /**
+     * @param string $name
+     * @param array $arguments
+     * @return bool
+     */
+    public final function __call($name, $arguments) {
+        
+        return $this->response($name, count($arguments) ? $arguments : array());
     }
     /**
      * Preload all core and instance components
@@ -412,27 +398,52 @@ class Request{
         
         return $this;
     }
+    /**
+     * 
+     * @param \CODERS\Framework\Request $request
+     * @param boolean $admin
+     * @return \CODERS\Framework\Response
+     */
+    protected static final function create( Request $request , $admin = false ){
+
+        $path = self::__contextPath( $request->endPoint(), $request->context() , $admin);
+        $class = self::__contextClass( $request->endPoint(), $request->context(), $admin );
+        if(file_exists($path)){
+            require_once $path;
+            if(class_exists($class) && is_subclass_of($class, Response::class)){
+                return new $class( $request->endPoint() ,$request->action(true));
+            }
+            elseif (\CodersApp::debug()) {
+                \CodersApp::notify(sprintf('Invalid context class %s', $class), 'error');
+            }
+        }
+        elseif (\CodersApp::debug()) {
+            \CodersApp::notify(sprintf('Invalid context path %s', $path), 'error');
+        }
+        return new Response($request->endPoint(),$request->context());
+    }
 
     /**
-     * @param boolean admin
+     * @param string $endpoint
+     * @param string $context
+     * @param boolean $admin
      * @return String
      */
-    private final function __contextPath( $admin = false ){
-            return sprintf('%s/components/controllers/%s.php',
-                    \CodersApp::path($this->endPoint()) ,
-                    $admin && $this->context() !== 'admin' ?
-                        'admin-' . $this->context() :
-                        $this->context() );
+    private static final function __contextPath( $endpoint , $context , $admin = false ){
+        $path = \CodersApp::path($endpoint);
+        $route = $admin && $context !== 'admin' ? 'admin-' . $context : $context;
+        return sprintf('%s/components/controllers/%s.php',$path,$route );
     }
     /**
+     * @param string $endpoint
+     * @param string $context
+     * @param boolean $admin
      * @return String
      */
-    private final function __contextClass( $admin = false ){
-            return sprintf('\CODERS\%s\%sController',
-                    $this->endPoint(TRUE),
-                    $admin && $this->context() !== 'admin' ?
-                        $this->context(true) . 'Admin' :
-                        $this->context(TRUE));
+    private static final function __contextClass( $endpoint , $context , $admin = false ){
+        $namespace = preg_replace('/ /','', ucwords(preg_replace('/-/',' ', $endpoint )));
+        $controller = $admin && $context !== 'admin' ? ucfirst($context) . 'Admin' : ucfirst($context);
+        return sprintf('\CODERS\%s\%sController', $namespace,$controller );
     }
     /**
      * @param string $provider
@@ -491,6 +502,23 @@ class Request{
 
         return FALSE;
     }
+    /**
+     * Write the response/output
+     * @return boolean
+     */
+    public final function response( $action = '' ){
+        
+        if( strlen($action) === 0 ){
+            $action = $this->action();
+        }
+        
+        $call = sprintf('%s_action',$action);
+        
+        return method_exists($this, $call) ?
+                $this->$call( $this->input() ) : 
+                $this->error_action( $this->input() );
+    }
 }
+
 
 

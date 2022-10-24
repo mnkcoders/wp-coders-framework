@@ -476,7 +476,7 @@ abstract class CodersApp{
             foreach (self::list() as $endpoint) {
                 if ( self::__type($endpoint) === 'application' ) {
                     $app = self::load($endpoint, 'application');
-                    if( FALSE !== $app ){
+                    if( !is_null($app) ){
                         self::registerAdminApp($app);
                         self::registerAdminMenu($app->setupAdminMenu());
                     }
