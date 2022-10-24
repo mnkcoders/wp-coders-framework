@@ -68,7 +68,7 @@ final class Strings{
             
         }
         catch (\Exception $ex) {
-            \CodersApp::notice('error loading strings ' . $ex->getMessage());
+            \CodersApp::notify('error loading strings ' . $ex->getMessage());
         }
         return '';
     }

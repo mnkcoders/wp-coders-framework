@@ -20,6 +20,9 @@ class Request{
     private $_context = 'main';
     private $_action = 'default';
     private $_ts;
+    private $_components = array(
+        'strings'
+    );
 
     /**
      * @param string $endpoint
@@ -39,6 +42,9 @@ class Request{
         elseif(is_admin()){
             $this->_action = $this->get('action', 'default', INPUT_GET);
         }
+        
+        //import all endpoint required components by request
+        $this->preload();
     }
     /**
      * @return string
@@ -110,16 +116,6 @@ class Request{
                 return array();
         }
     }
-    /**
-     * @param $full
-     * @return string
-     */
-    /*public final function route( $full = FALSE ){
-        return $full ?
-            $this->endPoint() . '.' . $this->action( true ) :
-            $this->action( true ) ;
-    }*/
-
     /**
      * Retorna un valor numérico
      * @param string $property
@@ -261,6 +257,10 @@ class Request{
     public static final function createLink( $action , array $args = array() , $admin = false ){
         $route = explode('.', $action);
         
+        if(strlen($route[0]) === 0 ){
+            $route[0] = \CodersApp::instance()->endPoint();
+        }
+        
         $endpoint_url = $admin ?
                 admin_url():
                 get_site_url() . '/' . $route[0];
@@ -359,14 +359,60 @@ class Request{
                 //return $controller->$action( $this->list());
             }
             elseif (\CodersApp::debug()) {
-                \CodersApp::notice(sprintf('Invalid context class %s', $class), 'error');
+                \CodersApp::notify(sprintf('Invalid context class %s', $class), 'error');
             }
         }
         elseif (\CodersApp::debug()) {
-            \CodersApp::notice(sprintf('Invalid context path %s', $path), 'error');
+            \CodersApp::notify(sprintf('Invalid context path %s', $path), 'error');
         }
         return $this;
     }
+    /**
+     * Preload all core and instance components
+     * @return \CODERS\Framework\Request
+     */
+    private final function preload( ){
+        foreach( $this->_components as $component ){
+            if(strlen($component)){
+                $route = explode('.', $component);
+                $path = '';
+                switch( count( $route ) ){
+                    case 3: //load endpoint custom component
+                        $path = sprintf('%s/components/%s/%s.php',
+                                \CodersApp::path( strlen($route[0]) > 0 ? $route[0] : $this->endPoint() ),
+                                $route[1], $route[2]);
+                        break;
+                    case 2: //load framework component
+                        $path = sprintf('%s/components/%s/%s.php', \CodersApp::path(), $route[0],$route[1]);
+                        break;
+                    case 1: //load framework classes
+                        $path = sprintf('%s/classes/%s.php', \CodersApp::path(), $route[0]);
+                        break;
+                }
+                if( strlen($path) && file_exists($path)){
+                    require_once $path;
+                }
+                else{
+                    \CodersApp::notify( sprintf('Invalid component path [%s]',$path),'error');
+                }
+            }
+        }
+        $this->_components = array();
+        return $this;
+    }
+    /**
+     * @param string $component
+     * @return \CODERS\Framework\Request
+     */
+    protected function require( $component ){
+        
+        if( !in_array( $component ,$this->_components ) ){
+                $this->_components[ ] = $component;
+        }
+        
+        return $this;
+    }
+
     /**
      * @param boolean admin
      * @return String

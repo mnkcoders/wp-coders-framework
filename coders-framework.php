@@ -27,26 +27,19 @@ abstract class CodersApp{
      */
     private static $_endpoints = array( );
     /**
-     * @var \CODERS\Framework\Strings
-     */
-    private $_strings = null;
-    /**
      * INSTANCE COMPONENTS
      * @var array
      */
     private $_components = array(
         'request',
+        'strings',
     );
     /**
      * 
      */
     protected function __construct( $admin = FALSE  ) {
 
-        if( !$admin ){
-            $this->importComponents( );        
-        }
-
-        $this->importStrings();
+        
     }
     /**
      * @return array
@@ -88,16 +81,6 @@ abstract class CodersApp{
      */
     protected final function __components(){
         return $this->_components;
-    }
-    /**
-     * @param string $string
-     * @return string
-     */
-    public static final function __( $string ){
-        if( !is_null(self::$_instance) && !is_null(self::$_instance->_strings)){
-            return self::$_instance->_strings->__($string);
-        }
-        return '';
     }
     /**
      * Ruta local de contenido de la aplicación
@@ -175,7 +158,6 @@ abstract class CodersApp{
             return $output;
         }
         return preg_replace('/\s/', '', ucwords(preg_replace('/[\-\_]/', ' ' , $string)));
-        //return preg_replace('/\s/', '', ucwords( preg_replace('/_/', ' ', $name ) ) );
     }
     /**
      * @param string|array $string
@@ -213,6 +195,16 @@ abstract class CodersApp{
      */
     public static final function __callStatic($name, $arguments) {
         switch( true ){
+            case $name === 'uninstall':
+                if( count($arguments)){
+                    self::__uninstall($arguments[0]);
+                }
+                break;
+            case $name === 'install':
+                if( count($arguments)){
+                    self::__install($arguments[0] , true);
+                }
+                break;
             case preg_match('/^register_/', $name):
                 if( count($arguments )){
                     $call = '__register' . self::__cc(substr($name ,9 , strlen($name)-9 ));
@@ -240,11 +232,11 @@ abstract class CodersApp{
      * @param array $args
      * @return array
      */
-    protected function __ajax( $action = 'default'){
+    protected function __ajax( $action = 'default' , array $args = array()){
         if(strlen($action)){
             $ajax = $action . '_ajax';
             if(method_exists($this, $ajax)){
-                return $this->$ajax( );
+                return $this->$ajax( $args );
             }
         }
         return array();
@@ -304,53 +296,44 @@ abstract class CodersApp{
                 preg_replace('/\\\\/','/',ABSPATH ),
                 strlen($endpoint) ? $endpoint . '/' : '' );
     }
-
-    /**
-     * @return \CodersApp
-     */
-    protected final function importStrings(){
-        require_once sprintf('%s/classes/strings.php',self::__pluginDir(true));
-        if(class_exists('\CODERS\Framework\Strings')){
-            $this->_strings = \CODERS\Framework\Strings::create($this->endPoint());
-        }
-        return $this;
-    }
     /**
      * Preload all core and instance components
      * @return CodersApp
      */
-    private final function importComponents( ){
+    private final function preload( ){
         
         foreach( $this->_components as $component ){
             if(strlen($component)){
-                $type = explode('.', $component);
+                $route = explode('.', $component);
                 $path = '';
-                switch( count($type) ){
-                    case 3:
-                        $path = sprintf('%s%s/components/%s/%s.php',
-                                self::__pluginDir(),
-                                strlen($type[0]) > 0 ? $type[0] : $this->endPoint(),
-                                $type[1], $type[2]);
+                switch( count($route) ){
+                    case 3: //load endpoint custom component
+                        $path = sprintf('%s/components/%s/%s.php',
+                                self::path( strlen($route[0]) > 0 ? $route[0] : $this->endPoint() ),
+                                $route[1], $route[2]);
                         break;
-                    case 2:
+                    case 2: //load framework component
                         $path = sprintf('%s/components/%s/%s.php',
                                 CODERS_FRAMEWORK_BASE,
-                                $type[0],$type[1]);
+                                $route[0],$route[1]);
                         break;
-                    case 1:
+                    case 1: //load framework classes
                         $path = sprintf('%s/classes/%s.php',
                                 CODERS_FRAMEWORK_BASE,
-                                $type[0]);
+                                $route[0]);
                         break;
                 }
                 if( strlen($path) && file_exists($path)){
                     require_once $path;
                 }
                 else{
-                    self::notice( sprintf('Invalid component path [%s]',$path),'error');
+                    self::notify( sprintf('Invalid component path [%s]',$path),'error');
                 }
             }
         }
+        //reset after loading
+        $this->_components = array();
+
         return $this;
     }
     /**
@@ -365,6 +348,8 @@ abstract class CodersApp{
      */
     protected function response($route = '') {
         
+        $this->preload();
+
         $context = is_admin() && strlen($route) === 0 ? 'admin' : preg_replace('/-/', '.', $route);
 
         \CODERS\Framework\Request::import(
@@ -375,12 +360,10 @@ abstract class CodersApp{
      * @param string $component
      * @return \CodersApp
      */
-    protected function import( $component ){
-        
+    protected function require( $component ){
         if( !in_array( $component ,$this->_components ) ){
                 $this->_components[ ] = $component;
         }
-        
         return $this;
     }
     /**
@@ -426,17 +409,16 @@ abstract class CodersApp{
                 require sprintf('%s/components/views/admin/html/admin.php',self::__pluginDir(true));
             }
             elseif(self::exists($endpoint)){
-                $app = self::importAdminApp($endpoint);
-                if( !is_null($app)){
-                    //var_dump($app);
-                    $app->importComponents()->response( $context );
+                self::$_instance = self::importAdminApp($endpoint);
+                if( !is_null(self::$_instance)){
+                    self::$_instance->response( $context );
                 }
                 else{
-                    self::notice(sprintf('Invalid Endpoint Boot [%s]',$endpoint), 'error');
+                    self::notify(sprintf('Invalid Endpoint Boot [%s]',$endpoint), 'error');
                 }
             }
             else{
-                self::notice(sprintf('Invalid Endpoint Menu [%s]',$endpoint), 'error');
+                self::notify(sprintf('Invalid Endpoint Menu [%s]',$endpoint), 'error');
             }
         }        
     }
@@ -448,26 +430,24 @@ abstract class CodersApp{
     private static final function __runEndpoint( $endpoint , $context = '' ){
         if ( self::exists($endpoint)) {
             $action = get_query_var( $endpoint , '' );
-            $call = self::__callable($endpoint);
-            if( $endpoint === 'coders-framework' ){
-                if( self::debug()){
-                    require sprintf('%s/components/views/public/html/list.php',self::__pluginDir(true));
-                }
-            }
-            elseif(function_exists ($call) ){
-                $call( $action );
-            }
-            elseif(is_null(self::$_instance)){
-                self::$_instance = self::load($endpoint,'application');
-                if( !is_null(self::$_instance) ){
-                    self::$_instance->response($action);
-                }
-                elseif(self::debug()){
-                    printf('<p>Invalid App loader %s</p>',$endpoint);
-                }
-            }
-            else{
-                var_dump(self::$_instance);
+            switch( self::__type($endpoint)){
+                case 'system':
+                    if( self::debug()){
+                        require sprintf('%s/components/views/public/html/list.php',self::__pluginDir(true));
+                    }
+                    break;
+                case 'callable':
+                    $call = self::__callable($endpoint);
+                    $call( $action );
+                    break;
+                case 'application':
+                    if(is_null(self::$_instance)){
+                        self::$_instance = self::load($endpoint,'application');
+                        if( !is_null(self::$_instance) ){
+                            self::$_instance->response($action);
+                        }
+                    }
+                    break;
             }
         }
     }
@@ -476,16 +456,14 @@ abstract class CodersApp{
      */
     protected static final function __registerAjax( $endpoint ){
         $action = preg_replace('/-/', '_', $endpoint);
-        $hooks = array(
-            sprintf('wp_ajax_%s', $action),
-            sprintf('wp_ajax_nopriv_%s', $action),
-        );
-        foreach ($hooks as $hook) {
-            add_action($hook, function() use($endpoint) {
-                CodersApp::run_ajax($endpoint);
-                wp_die();
-            });
-        }
+        add_action(sprintf('wp_ajax_%s', $action), function() use($endpoint) {
+            CodersApp::run_ajax($endpoint);
+            wp_die();
+        });
+        add_action(sprintf('wp_ajax_nopriv_%s', $action), function() use($endpoint) {
+            CodersApp::run_ajax($endpoint);
+            wp_die();
+        });
     }
     /**
      * Register an application instance into the admin menu
@@ -582,7 +560,7 @@ abstract class CodersApp{
      * @author Coder01 <coder01@mnkcoder.com>
      * @param string $endpoint
      * @param string $file
-     * @return \CodersApp|Bool
+     * @return \CodersApp
      */
     private static final function load( $endpoint , $file = 'application'  ){
         if ( strlen($endpoint) ){
@@ -596,13 +574,13 @@ abstract class CodersApp{
                 return self::create($endpoint);
             }
             else{
-                self::notice(sprintf('invalid endpoint path [%s]',$path));
+                self::notify(sprintf('invalid endpoint path [%s]',$path));
             }
         }
         else{
-            self::notice(sprintf('invalid endpoint [%s]',$endpoint));
+            self::notify(sprintf('invalid endpoint [%s]',$endpoint));
         }
-        return FALSE;
+        return null;
     }
     /**
      * @param string $endpoint
@@ -622,41 +600,98 @@ abstract class CodersApp{
      * @param callable $callback
      * @param string $key 
      */
-    public static final function __install( $plugin ){
+    private static final function __install( $plugin , $rewrite = false ){
+
+        $path = explode('/',  preg_replace('/\\\\/', '/', $plugin ) );
+        $endpoint = $path[count($path)-1];
         
-        if(!is_admin()){
-            return;
+        self::register($plugin);
+
+        if( $rewrite ){
+            global $wp_rewrite, $wp;
+            foreach (CodersApp::list() as $ep) {
+                $wp_rewrite->add_endpoint($ep,EP_ROOT);
+                $wp->add_query_var($ep);
+                $wp_rewrite->add_rule("^/$ep/?$", 'index.php?' . $ep . '=$matches[1]', 'top');
+                $wp_rewrite->flush_rules( );
+            }
         }
         
-        self::notice( self::path($plugin ) );
+        if( self::__type($endpoint) === 'application'){
+            $app = self::load($endpoint);
+            if( !is_null($app)){
+                $app->require('model')->preload()->install();
+            }
+        }
+
+        self::notify( self::path($endpoint ) , 'info' , true ,  $endpoint.'_install');
+    }
+    /**
+     * 
+     * @return \CodersApp
+     */
+    protected function install(){
+        
+        //fill in all install routines
+
+        return $this;
     }
     /**
      * @param string $plugin
      * @param callable $callback
      * @param string $key
      */
-    public static final function __uninstall( $plugin ){
+    private static final function __uninstall( $plugin ){
         
-        if(!is_admin()){
-            return;
+        $path = explode('/',  preg_replace('/\\\\/', '/', $plugin ) );
+        $endpoint = $path[count($path)-1];
+
+        if( self::__type($endpoint) === 'application'){
+            $app = self::load($endpoint);
+            if( !is_null($app)){
+                $app->require('model')->preload()->uninstall();
+            }
         }
-       
-        self::notice( self::path($plugin) );
+        
+        self::notify( self::path($endpoint ) , 'info' , true , $endpoint.'_uninstall');
+    }
+    /**
+     * @return \CodersApp
+     */
+    protected function uninstall(){
+
+        //     * Fill in all uninstall routines
+        
+        return $this;
     }
     /**
      * @param string $message
      * @param string $class
+     * @param boolean $admin
      */
-    public static final function notice( $message , $class = '') {
-        printf('<p class="notify is-dimissible %s">%s</p>' ,$class, $message );
-        /*if(is_admin()){
-            add_action('admin_notices', function() use( $message , $class ) {
-                printf('<div class="notice is-dimissible %s"><p>%s</p></div>',$class,$message );
+    public static final function notify( $message , $class = '' , $admin = false , $transient = '' ) {
+        
+        if( $admin && is_admin()){
+            $contents = array(
+                'message' => $message,
+                'class' => $class,
+                'transient' => $transient,
+            );
+            add_action('admin_notices', function() use( $contents ) {
+                if(strlen($contents['transient'])){
+                    if(get_transient($contents['transient'])){
+                        printf('<div class="notice is-dimissible %s"><p>%s</p></div>',$contents['class'],$contents['message'] );
+                        delete_transient($contents['transient']);
+                    }
+                }
+                else{
+                    printf('<div class="notice is-dimissible %s"><p>%s</p></div>',$contents['class'],$contents['message'] );
+                }
             });            
         }
-        elseif(self::debug ()){
-            printf('<p class="notify %s">%s</p>' ,$class, $message );
-        }*/
+        else{
+            printf('<p class="notify is-dimissible %s">%s</p>' ,$class, $message );
+        }
     }
     /**
      * 
@@ -686,31 +721,32 @@ abstract class CodersApp{
                 }
                 else{
                     //public
-                    global $wp, $wp_rewrite;
-                    $list = CodersApp::list(true);
-                    foreach ($list as $endpoint => $setup) {
-                        add_rewrite_endpoint($endpoint, EP_ROOT);
+                    global $wp;
+                    //global $wp_rewrite;
+                    foreach (CodersApp::list() as $endpoint) {
+                        //add_rewrite_endpoint($endpoint, EP_ROOT);
                         $wp->add_query_var($endpoint);
-                        $wp_rewrite->add_rule("^/$endpoint/?$", 'index.php?' . $endpoint . '=$matches[1]', 'top');
+                        //$wp_rewrite->add_rule("^/$endpoint/?$", 'index.php?' . $endpoint . '=$matches[1]', 'top');
                     }
-                    if( count( $list ) ){
+                    /*if( count( $list ) ){
                         $wp_rewrite->flush_rules();
-                    }                    
+                    }*/
                     /*SETUP RESPONSE*/
                     add_action( 'template_redirect', function(){
-                        $endpoint = (function(){
+                        $route = (function(){
                             global $wp_query;
                             foreach (CodersApp::list() as $endpoint ){
                                 if(array_key_exists($endpoint, $wp_query->query ) ){
-                                    $wp_query->set('is_404', FALSE);
                                     return $endpoint;
                                 }
                             }
                             return '';
                         })();
                         
-                        if (strlen($endpoint) > 0) {
-                            CodersApp::run_endpoint($endpoint);
+                        if (strlen($route) > 0) {
+                            global $wp_query;
+                            $wp_query->set('is_404', FALSE);
+                            CodersApp::run_endpoint($route);
                             exit;
                         }
                     } , 10 );

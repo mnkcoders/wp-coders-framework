@@ -71,7 +71,7 @@ class Uploader extends \CODERS\Framework\Provider{
     public final function upload( $input ){
         
         if( !$this->exists() ){
-            \CodersApp::notice('Invalid storage path ' . $this->storage());
+            \CodersApp::notify('Invalid storage path ' . $this->storage());
             return false;
         }
 
@@ -115,7 +115,7 @@ class Uploader extends \CODERS\Framework\Provider{
             }
             catch (\Exception $ex) {
                 //send notification
-                \CodersApp::notice( $ex->getMessage() );
+                \CodersApp::notify( $ex->getMessage() );
             }
         }
         return $this;

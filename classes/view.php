@@ -13,8 +13,11 @@ abstract class View{
     private $_model = NULL;
     private $_layout = 'default';
     private $_endpoint = array();
-    
-    private $_strings = array();
+    /**
+     *
+     * @var \CODERS\Framework\Strings
+     */
+    private $_strings = null;
     
     private $_activeForm = '';
 
@@ -52,6 +55,16 @@ abstract class View{
 
         $this->_endpoint = explode('.', $route);
     }
+    /**
+     * @return \CODERS\Framework\View
+     */
+    private final function preloadStrings(){
+        if( is_null($this->_strings) && class_exists('\CODERS\Framework\Strings')){
+            $this->_strings = \CODERS\Framework\Strings::create($this->endPoint());
+        }
+        return $this;
+    }
+
     /**
      * @return String
      */
@@ -111,12 +124,12 @@ abstract class View{
                             '<!-- empty html -->';
             case preg_match('/^submit_/', $name):
                 $action = substr($name, 7);
-                $content = count($arguments) && is_string($arguments[0])? $arguments[0] : $this->string( $name);
+                $content = count($arguments) && is_string($arguments[0])? $arguments[0] : $this->__( $name);
                 $attributes = count($arguments) > 1 ? $arguments[1] : $arguments[0];
                 return $this->__submit($action,$content, is_array( $attributes) ? $attributes : array() );
             case preg_match('/^button_/', $name):
                 $action = substr($name, 7);
-                $content = count($arguments) && is_string($arguments[0])? $arguments[0] : $this->string( $name);
+                $content = count($arguments) && is_string($arguments[0])? $arguments[0] : $this->__( $name);
                 $attributes = count($arguments) > 1 ? $arguments[1] : $arguments[0];
                 return $this->__button($action,$content, is_array( $attributes) ? $attributes : array() );
             case preg_match('/^action_/', $name):
@@ -129,7 +142,10 @@ abstract class View{
                 }
                 return sprintf('<!-- invalid action [%s]-->',$action);
             case preg_match('/^input_/', $name):
-                return $this->__input(substr($name, 6));
+                return $this->__inputType(
+                        substr($name, 6),
+                        count($arguments) ? $arguments[0] : '__' . $name,
+                        count($arguments) > 1 ? $arguments[1] : array());
             case preg_match(  '/^list_[a-z_]*_options$/' , $name ):
                 return $this->__options(substr($name, 5, strlen($name) - 5 - 8 ) );
             case preg_match(  '/^list_/' , $name ):
@@ -142,6 +158,8 @@ abstract class View{
                 return $this->__display(substr($name, 8));
             case preg_match(  '/^label_/' , $name ):
                 return $this->label(substr($name, 6));
+            case $name === 'label':
+                return count($arguments) ? $this->label($arguments[0]) : '';
             case preg_match(  '/^get_/' , $name ):
                 $get = substr($name, 6);
                 return $this->has($name) ? $this->_model->get($get) : '';
@@ -160,7 +178,7 @@ abstract class View{
             $args['class'] :
                 'button ' . preg_replace('/\./', '-', $name);
         
-        return Renderer::submit($name, $this->string(is_string($content) ? $content : 'submit_'.$name) , $args );
+        return Renderer::submit($name, $this->__(is_string($content) ? $content : 'submit_'.$name) , $args );
     }
     /**
      * @param string $name
@@ -174,7 +192,7 @@ abstract class View{
             $args['class'] :
                 'button ' . preg_replace('/\./', '-', $name);
 
-        return Renderer::button($name, $this->string( is_string($content) ? $content : 'button_'.$name), $args );
+        return Renderer::button($name, $this->__( is_string($content) ? $content : 'button_'.$name), $args );
     }
     /**
      * @param string $action
@@ -210,6 +228,19 @@ abstract class View{
         
         return Renderer::action($url, $label , array('class'=> preg_replace('/\./', '-', $action)));
     }
+    /**
+     * @param string $type
+     * @param array $atts
+     * @return string|HTML
+     */
+    protected function __inputType( $type , $name , array $atts = array()){
+        switch( $type ){
+            case Model::TYPE_FILE:
+                return Renderer::inputFile($name, $atts);
+        }
+        return sprintf('<!-- invalid input type %s -->',$type);
+    }
+
     /**
      * List to override and add custom inputs
      * @param string $name
@@ -303,17 +334,6 @@ abstract class View{
         return $this;
     }
     /**
-     * @param string $key
-     * @param string $string
-     * @return \CODERS\Framework\View
-     */
-    protected function addString( $key , $string ){
-        if(is_string($key) && is_string($string)){
-            $this->_strings[$key] = $string;
-        }
-        return $this;
-    }
-    /**
      * @param string $asset
      * @return String|URL
      */
@@ -376,7 +396,9 @@ abstract class View{
     protected function openForm( array $args ){
         if( count($args) && $this->_activeForm  === '' ){
             $name = $args[0];
-            $action = count($args) > 1 ? $args[1] : filter_input(INPUT_SERVER, 'PHP_SELF' );
+            $action = count($args) > 1 ?
+                    Request::createLink($args[1] , array() , true) :
+                    filter_input(INPUT_SERVER, 'PHP_SELF' );
             $method = count($args) > 2 ? $args[2] : 'post';
             $type = count($args) > 3 ? $args[3] : Renderer::FORM_TYPE_PLAIN;
             
@@ -448,21 +470,14 @@ abstract class View{
      * @return string
      */
     protected function label( $name ){
-        return $this->string($name);
+        return $this->__($name);
         return $this->has($name) ?
                 $this->_model->meta($name,'label',$name) :
-                        $this->string($name);
+                        $this->__($name);
     }
-    /**
-     * @param string $key
-     * @return string
-     */
-    protected function string( $key ){
-        return \CodersApp::__($key);
-        //return array_key_exists($key, $this->_strings) ? $this->_strings[$key] : $key;
+    protected function __( $key ){
+        return !is_null($this->_strings) ? $this->_strings->__( $key ) : $key;
     }
-
-    
     /**
      * @param string $element
      * @return boolean
@@ -631,7 +646,8 @@ abstract class View{
      */
     public function show(){
 
-        $this->prepare()
+        $this->preloadStrings()
+                ->prepare()
                 ->renderHeader()
                 ->renderContent()
                 ->renderFooter();
@@ -690,7 +706,7 @@ abstract class View{
             }
         }
         catch (\Exception $ex) {
-            \CodersApp::notice($ex->getMessage());
+            \CodersApp::notify($ex->getMessage());
         }
         
         return null;
@@ -1184,7 +1200,7 @@ class Renderer{
         
         $max_filesize = 'MAX_FILE_SIZE';
         
-        $atts['id'] = 'id_' . preg_replace('/-/', '_', $name);
+        $atts['id'] = 'id_' . preg_replace('/-/', '_', preg_replace('/\[.*\]/','',$name));
         $atts['name'] = $name;
         $atts['type'] = 'file';
         
@@ -1195,7 +1211,7 @@ class Renderer{
             unset($atts[$max_filesize]);
         }
         
-        return self::inputHidden( $max_filesize, $file_size ) . self::html('file', $atts );
+        return self::inputHidden( $max_filesize, $file_size ) . self::html('input', $atts );
     }
     /**
      * <button type="*" />

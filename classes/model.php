@@ -37,6 +37,10 @@ abstract class Model{
         
         $this->_endpoint = is_array($route) ? $route : explode('.', $route);
         
+        if(strlen($this->_endpoint[0]) === 0){
+            $this->_endpoint[0] = \CodersApp::instance()->endPoint();
+        }
+        
         if( count( $data ) ){
             $this->import($data);
         }
@@ -296,10 +300,10 @@ abstract class Model{
      * @param string $element
      * @return boolean
      */
-    public function exists( $element ){
+    /*public function exists( $element ){
         //return array_key_exists($element, $this->_dictionary);
         return $this->has($element);
-    }
+    }*/
     /**
      * @param string $element
      * @param string $attribute
@@ -395,7 +399,7 @@ abstract class Model{
             if(method_exists($this, $set)){
                 $this->$set( $value );
             }
-            elseif( $this->exists($element)){
+            elseif( $this->has($element)){
                 $this->set($element, 'value', $value);
             }
         }
@@ -414,7 +418,7 @@ abstract class Model{
             $this->$customSetter( $value );
             //$this->set($element, 'updated', true);
         }
-        elseif( $this->exists($element)){
+        elseif( $this->has($element)){
             switch( $this->type($element)){
                 case self::TYPE_CHECKBOX:
                     return $this->set($element,
@@ -461,10 +465,31 @@ abstract class Model{
         return $output;
     }
     /**
+     * @return array
+     */
+    public final function updated(){
+        $updated = array();
+        foreach( $this->elements() as $element ){
+            if( $this->get($element, 'updated', FALSE)){
+                $updated[$element] = $this->value($element);
+            }
+        }
+        return $updated;
+    }
+
+    /**
      * @return \CODERS\Framework\Query
      */
     protected static final function newQuery(){
-        return new Query($this->endpoint());
+        return self::db();
+        //return new Query($this->endpoint());
+    }
+    /**
+     * @return \CODERS\Framework\Query
+     */
+    protected static final function db(){
+        $endpoint = \CodersApp::instance()->endPoint();
+        return new Query($endpoint);
     }
     /**
      * @param string $request
@@ -551,7 +576,7 @@ abstract class Model{
             }
         }
         catch (\Exception $ex) {
-            \CodersApp::notice($ex->getMessage());
+            \CodersApp::notify($ex->getMessage());
         }
         
         return null;
@@ -735,7 +760,7 @@ final class Query {
         $sql_update = sprintf( "UPDATE %s SET %s WHERE %s",
                 $this->table($table),
                 implode(',', $values),
-                $this->set_filters($filters));
+                $this->where($filters));
         
         $result = $db->query($sql_update);
         
@@ -837,7 +862,7 @@ final class Query {
                 $type = array_key_exists('type', $def) ? $def['type'] : 'text';
                 $size = array_key_exists('size', $def) ? $def['size'] : 8;
                 $index = array_key_exists('index', $def) && $def['index'];
-                $required = array_key_exists('required', $def) && $def['required'];
+                $required = $index || array_key_exists('required', $def) && $def['required'];
                 $default = array_key_exists('default', $def) ? $def['default'] : '';
                 $content = array( '`' . $column . '`' );
                 switch( $type ){
@@ -906,7 +931,7 @@ final class Query {
             $counter = 0;
             foreach( $sql as $query ){
                 $result = dbDelta($query);
-                \CodersApp::notice(json_encode($result));
+                \CodersApp::notify(json_encode($result));
                 //print($query);
                 //var_dump($result);
                 $counter++;
@@ -928,7 +953,7 @@ final class Query {
         $sql = sprintf('DROP TABLE IF EXISTS %s', implode(' ', $remove));
         $result = $this->db()->query($sql);
         if( $result ){
-            \CodersApp::notice('tables removed ' . implode(', ', $remove));
+            \CodersApp::notify('tables removed ' . implode(', ', $remove));
         }
         return $result;
     }
