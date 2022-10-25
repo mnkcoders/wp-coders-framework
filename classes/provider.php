@@ -4,7 +4,7 @@ defined('ABSPATH') or die;
 
 abstract class Provider{
     
-    private $_settings = array(
+    private $_elements = array(
         
     );
     
@@ -26,17 +26,29 @@ abstract class Provider{
      * @param mixed $value
      * @return \CODERS\Framework\Provider
      */
-    protected function __define( $setting , $value = '' ){
-        $this->_settings[$setting] = $value;
+    protected function define( $setting , $value = '' ){
+        $this->_elements[$setting] = $value;
         return $this;
+    }
+    /**
+     * @return array
+     */
+    public final function elements(){
+        return array_keys($this->_elements);
+    }
+    /**
+     * @return array
+     */
+    public final function values(){
+        return $this->_elements;
     }
     /**
      * @param array $data
      */
     private final function __import( array $data = array()){
         foreach( $data as $var => $val ){
-            if(array_key_exists($var, $this->_settings)){
-                $this->_settings[$var] = $val;
+            if(array_key_exists($var, $this->_elements)){
+                $this->_elements[$var] = $val;
             }
         }
     }
@@ -52,7 +64,7 @@ abstract class Provider{
      * @return mixed
      */
     public function __get($name) {
-        return array_key_exists($name, $this->_settings) ? $this->_settings[$name] : '';
+        return array_key_exists($name, $this->_elements) ? $this->_elements[$name] : '';
     }
     /**
      * @param string $name

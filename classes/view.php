@@ -20,6 +20,10 @@ abstract class View{
     private $_strings = null;
     
     private $_activeForm = '';
+    /**
+     * @var array
+     */
+    private $_inbox = array();
 
     /**
      * @var URL
@@ -519,6 +523,21 @@ abstract class View{
         return $this;
     }
     /**
+     * @param array $input
+     * @return \CODERS\Framework\View
+     */
+    public function importMessages( $input ){
+        if(is_array($input)){
+            foreach( $input as $msg){
+                $this->_inbox[] = $msg;
+            }
+        }
+        elseif(is_string($input)){
+            $this->_inbox[] = $input;
+        }
+        return $this;
+    }
+    /**
      * @return string |PATH
      */
     protected function __path(){
@@ -598,11 +617,21 @@ abstract class View{
         return $this;
     }
     /**
+     * @return \CODERS\Framework\View
+     */
+    protected function showAdminMessages(){
+        foreach( $this->_inbox as $msg ){
+            printf('<div class="notice is-dimissible"><p>%s</p></div>',$msg );
+        }
+        return $this;
+    }
+    /**
      * Start the rendering
      * @return \CODERS\Framework\View
      */
     protected function renderHeader( ){
         if(is_admin()){
+            $this->showAdminMessages();
             printf('<!-- [%s] opener --><div class="wrap"><h1>%s</h1>', $this->endpoint(true), $this->getAdminPageTitle());
         }
         else{

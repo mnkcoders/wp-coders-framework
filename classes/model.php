@@ -648,6 +648,16 @@ final class Query {
         return $wpdb;
     }
     /**
+     * 
+     * @return \CODERS\Framework\Query
+     */
+    private final function checkErrors(){
+        if( strlen( $this->db()->last_error ) ){
+            \CodersApp::notify($db->last_error,'error', is_admin(),true);
+        }
+        return $this;
+    }
+    /**
      * @global string $table_prefix
      * @return string
      */
@@ -762,7 +772,7 @@ final class Query {
         
         $result = $db->query($sql_insert);
         
-        //var_dump($db->last_error);
+        $this->checkErrors();
         
         return FALSE !== $result ? $result : 0;
     }
@@ -800,6 +810,8 @@ final class Query {
         
         $result = $db->query($sql_update);
         
+        $this->checkErrors();
+        
         return FALSE !== $result ? $result : 0;
     }
     /**
@@ -812,7 +824,9 @@ final class Query {
         $db = self::db();
 
         $result = $db->delete($this->table($table), $filters);
-
+        
+        $this->checkErrors();
+        
         return FALSE !== $result ? $result : 0;
     }
     /**
@@ -825,7 +839,9 @@ final class Query {
         $db = self::db();
 
         $result = $db->get_results($SQL_QUERY, ARRAY_A );
-        
+
+        $this->checkErrors();
+
         if( !is_null($result) && count( $result ) ){
             
             if( strlen($index) ){
@@ -953,7 +969,7 @@ final class Query {
         foreach( $schema as $table => $data ){
 
             if( $this->__tableExists($table)){
-                printf('<p>%s already exists</p>',$this->table($table));
+                \CodersApp::notify(sprintf('<p>%s already exists</p>',$this->table($table)),'warning',true,true);
             }
             else{
                 $create = $this->__createTable($table, $data);

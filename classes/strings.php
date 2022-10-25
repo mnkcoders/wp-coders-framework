@@ -46,7 +46,7 @@ final class Strings{
         if(strlen($locale) === 0 ){
             $locale = get_locale();
         }        
-        return sprintf('%s/strings/strings_%s.cfg',\CodersApp::appRoot($endpoint),$locale);
+        return sprintf('%s/strings/strings_%s.cfg',\CodersApp::path($endpoint),$locale);
     }
     /**
      * @param string $endpoint

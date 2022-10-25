@@ -8,11 +8,11 @@ class File extends \CODERS\Framework\Provider{
      */
     protected function __construct(array $data = array()) {
 
-        parent::__define('id')
-                ->__define('name')
-                ->__define('size')
-                ->__define('type')
-                ->__define('storage','uploads');
+        parent::define('id')
+                ->define('name')
+                ->define('size')
+                ->define('type')
+                ->define('storage','uploads');
         
         parent::__construct($data);
     }
