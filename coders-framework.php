@@ -263,6 +263,24 @@ abstract class CodersApp{
             }
         }
     }
+    
+    protected static final function __registerRest( $endpoint ){
+
+        add_action('rest_api_init', function () use($endpoint) {
+            register_rest_route( sprintf('sprintf/%s/v1',$endpoint), '/context/action', array(
+                'methods' => 'GET',
+                'callback' => function( $data ){
+                    return array(
+                        'data' => $data,
+                        'ts' => time(),
+                        'response' => 'ok',
+                    );
+                },
+            ));
+        });
+
+    }
+
     /**
      * @param string $endpoint
      */

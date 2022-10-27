@@ -87,6 +87,12 @@ abstract class View{
         switch( true ){
             case $name === 'debug':
                 return $this->__debug();
+            case preg_match('/^has_/', $name):
+                $has = sprintf('has%s', preg_replace('/\s/', '',ucwords( preg_replace('/[\_\-]/', ' ', substr($name, 4)))));
+                return method_exists($this, $has) ? $this->$has() : false;
+            case preg_match('/^count_/', $name):
+                $count = sprintf('count%s', preg_replace('/\s/', '',ucwords( preg_replace('/[\_\-]/', ' ', substr($name, 6)))));
+                return method_exists($this, $count) ? $this->$count() : 0;
             case preg_match('/^action_/', $name):
                 return $this->__actionUrl(substr($name, 7, strlen($name)-7));
             case preg_match('/^admin_action_/', $name):
@@ -137,14 +143,11 @@ abstract class View{
                 $attributes = count($arguments) > 1 ? $arguments[1] : $arguments[0];
                 return $this->__button($action,$content, is_array( $attributes) ? $attributes : array() );
             case preg_match('/^action_/', $name):
-                $action = substr($name, 7);
-                if( count( $arguments )){
-                    return $this->__action(
-                            $arguments[0],
-                            count($arguments) > 1 ? $arguments[1] : $this->label($action),
-                            array('class'=>$action));
-                }
-                return sprintf('<!-- invalid action [%s]-->',$action);
+                $action = preg_replace('/[\-\_]/','.',substr($name, 7));
+                return $this->action($action,
+                            count($arguments) ? $arguments[0] : $this->label($action),
+                            count($arguments) > 1 ? $arguments[1] : array(),
+                            count($arguments) > 2 ? $arguments[2] : 'button ' . $action );
             case preg_match('/^input_/', $name):
                 return $this->__inputType(
                         substr($name, 6),
@@ -221,16 +224,38 @@ abstract class View{
     }
 
     /**
+     * @return string
+     */
+    protected function endpoint( $full = FALSE ){
+        return $full ? implode('.', $this->_endpoint) : $this->_endpoint[0];
+    }
+    /**
+     * @return string
+     */
+    protected function module(){
+        $path = explode('/',  $this->__path());
+        return $path[count($path)-1];
+    }
+    /**
      * @param string $action
      * @param string $label
-     * @param array $args
+     * @param array $params
+     * @param string $class
      * @return String
      */
-    protected function __action( $action , $label , array $args = array()){
+    protected function action( $action , $label , array $params = array() , $class = 'button' ){
+        $route = explode('.', $action);
+
+        if( count( $route) < 2 ){
+            $action = $this->module() . '.' . $action;
+        }
+        if( count( $route ) < 3 ){
+            $action = '.' . $action;
+        }
+
+        $url = Request::createLink($action, $params , true );
         
-        $url = Request::createLink($action, $args );
-        
-        return Renderer::action($url, $label , array('class'=> preg_replace('/\./', '-', $action)));
+        return Renderer::action($url, $label , array('class' => $class ) );
     }
     /**
      * @param string $type
@@ -239,6 +264,14 @@ abstract class View{
      */
     protected function __inputType( $type , $name , array $atts = array()){
         switch( $type ){
+            case Model::TYPE_TEXT:
+                return Renderer::inputText($name, '', $atts);
+            case Model::TYPE_TEXTAREA:
+                return Renderer::inputTextArea($name, '', $atts);
+            case Model::TYPE_NUMBER:
+                return Renderer::inputNumber($name, 0, $atts);
+            case Model::TYPE_DROPDOWN:
+                return Renderer::inputDropDown($name, $this->__list($name), null , $atts);
             case Model::TYPE_FILE:
                 return Renderer::inputFile($name, $atts);
         }
@@ -442,12 +475,6 @@ abstract class View{
                 sprintf('<!-- DATA %s NOT FOUND -->',$name);
     }
     /**
-     * @return string
-     */
-    protected function endpoint( $full = FALSE ){
-        return $full ? implode('.', $this->_endpoint) : $this->_endpoint[0];
-    }
-    /**
      * @param string $name
      * @return array
      */
@@ -455,6 +482,23 @@ abstract class View{
         
         return $this->has($name) ? $this->_model->options($name) : array();
     }
+    /**
+     * @param string $name
+     * @return number
+     */
+    protected final function __count( $name ){
+        $count = sprintf('count%s', preg_replace('/\s/', '', ucwords( preg_replace('/[\_\-]/', ' ', $name))));
+        return method_exists($this, $count) ? $this->$count() : 0;
+    }
+    /**
+     * @param string $name
+     * @return boolean
+     */
+    protected final function __has( $name ){
+        $has = sprintf('has%s', preg_replace('/\s/', '', ucwords( preg_replace('/[\_\-]/', ' ', $name))));
+        return method_exists($this, $has) ? $this->$has() : false;
+    }
+
     /**
      * @param string $list
      * @return array
