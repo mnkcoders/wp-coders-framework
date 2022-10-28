@@ -20,9 +20,10 @@ abstract class Model{
     const TYPE_OPTION = 'option';
     const TYPE_LIST = 'list';
     const TYPE_FILE = 'file';
+    const TYPE_HIDDEN = 'hidden';
     //
     
-    private $_endpoint;
+    private $_module;
     /**
      * @var array
      */
@@ -35,10 +36,10 @@ abstract class Model{
      */
     protected function __construct( $route , array $data = array( ) ) {
         
-        $this->_endpoint = is_array($route) ? $route : explode('.', $route);
+        $this->_module = is_array($route) ? $route : explode('.', $route);
         
-        if(strlen($this->_endpoint[0]) === 0){
-            $this->_endpoint[0] = \CodersApp::instance()->endPoint();
+        if(strlen($this->_module[0]) === 0){
+            $this->_module[0] = \CodersApp::instance()->endPoint();
         }
         
         if( count( $data ) ){
@@ -49,7 +50,7 @@ abstract class Model{
      * @return string
      */
     public function __toString() {
-        return $this->__model();
+        return implode('.', $this->_module);
         return $this->__class();
     }
     /**
@@ -84,36 +85,8 @@ abstract class Model{
      * @return mixed
      */
     public function __get($name) {
-        switch( TRUE ){
-            case preg_match(  '/^is_/' , $name ):
-                //RETURN BOOLEAN
-                $is = preg_replace('/_/', '', $name);
-                return method_exists($this, $is) ? $this->$is( ) : FALSE;
-            case preg_match(  '/^value_/' , $name ):
-                //RETURN VALUE
-                $element = substr($name, strlen('value_'));
-                return $this->value($element);
-            case preg_match(  '/^type_/' , $name ):
-                //RETURN LIST
-                $type = substr($name, strlen('type_'));
-                return $this->get($type, 'type', self::TYPE_TEXT);
-            case preg_match(  '/^label_/' , $name ):
-                //RETURN LIST
-                $label = substr($name, strlen('label_'));
-                return $this->get($label, 'label', $label );
-            case preg_match(  '/^list_/' , $name ):
-                //RETURN LIST
-                return $this->list(substr($name, 5));
-            case preg_match(  '/^error_/' , $name ):
-                //RETURN LIST
-                $element = substr($name, strlen('error_'));
-                return $this->get($element, 'error', '');
-            default:
-                //RETURN CUSTOMIZER GETTER
-                $get = sprintf('get%s',preg_replace('/_/', '', $name));
-                //OR DEFAULT FALLBACK IF DEFINED IN THE DICTIONARY
-                return method_exists($this, $get) ? $this->$get() : $this->value($name);
-        }
+        $get = sprintf('get%s',preg_replace('/\s/', '',ucwords( preg_replace('/[\_\-]/', ' ', $name ) ) ) );
+        return method_exists($this, $get) ? $this->$get() : $this->value($name);
     }
     /**
      * @param string $name
@@ -122,28 +95,22 @@ abstract class Model{
      */
     public function __call($name, $arguments) {
         switch( TRUE ){
-            case preg_match(  '/^label_/' , $name ):
-                //RETURN LIST
-                $input = substr($name, strlen('label_'));
-                return $this->get($input, 'label', $input);
-            case preg_match(  '/^is_/' , $name ):
-                //RETURN BOOLEAN
-                $is = preg_replace('/_/', '', $name);
-                return method_exists($this, $is) ? $this->$is( $arguments ) : FALSE;
-            case preg_match(  '/^list_/' , $name ):
-                //RETURN LIST
-                return $this->list(substr($name, 5));
             case preg_match(  '/^error_/' , $name ):
-                if( count( $arguments )){
-                    $element = substr($name, strlen('error_'));
-                    $this->set($element, 'error', $arguments[0] );
-                    return TRUE;
-                }
-                return FALSE;
+                return $this->get(substr($name, 6 ), 'error','');
+            case preg_match(  '/^value_/' , $name ):
+                return $this->value(substr($name, 6 ));
+            case preg_match(  '/^type_/' , $name ):
+                return $this->get(substr($name, 5), 'type', self::TYPE_TEXT);
+            case preg_match(  '/^label_/' , $name ):
+                return $this->get(substr($name, 6 ), 'label', $name );
+            case preg_match(  '/^is_/' , $name ):
+                return $this->is(substr($name, 3));
+            case preg_match('/^count_/', $name):
+                return $this->count(substr($name, 6));
+            case preg_match(  '/^list_/' , $name ):
+                return $this->list(substr($name, 5));
             default:
-                //RETURN STRING
-                $get = sprintf('get%s',preg_replace('/_/', '', $name));
-                return method_exists($this, $get) ? $this->$get( $arguments ) : $this->value($name);
+                return $name;
         }
     }
     
@@ -174,7 +141,7 @@ abstract class Model{
      * @return string
      */
     public final function endpoint(){
-        return $this->_endpoint[0];
+        return $this->_module[0];
     }
     /**
      * @return string
@@ -327,8 +294,9 @@ abstract class Model{
             }
             return TRUE;
         }
-        
-        return FALSE;
+
+        $has = sprintf('has%s',preg_replace('/\s/', '',ucwords( preg_replace('/[\_\-]/', ' ', $element ) ) ) );
+        return method_exists($this, $has) ? $this->$has() : false;
     }
     /**
      * @param string $element
@@ -361,6 +329,22 @@ abstract class Model{
     }
     /**
      * @param string $name
+     * @return number
+     */
+    public function count( $name ){
+        $count = 'count'. preg_replace('/\s/', '',ucwords( preg_replace('/[\_\-]/', ' ', $name ) ) );
+        return method_exists($this, $count) ? $this->$count( ) : 0;
+    }
+    /**
+     * @param string $name
+     * @return boolean
+     */
+    public function is( $name ){
+        $is = 'is'. preg_replace('/\s/', '',ucwords( preg_replace('/[\_\-]/', ' ', $name ) ) );
+        return method_exists($this, $is) ? $this->$is( ) : false;
+    }
+    /**
+     * @param string $name
      * @return array
      */
     public function list( $name ){
@@ -375,7 +359,6 @@ abstract class Model{
         $list = $this->meta($element, 'options');
         return strlen($list) ? $this->list($list) : array();
     }
-
     /**
      * @param string $element
      * @param string $meta
@@ -487,31 +470,11 @@ abstract class Model{
         return $updated;
     }
     /**
-     * @param string $table
-     * @param array $filters
-     * @param callable $callback
-     * @return array
+     * @return string
      */
-    public static function load( $table = '' , array $filters = array() ){
-        return self::db()->select(
-                strlen($table) ? $table : self::__model(),
-                '*' ,
-                $filters );
-    }
-    /**
-     * @param array $filters
-     * @return \CODERS\Framework\Model[]
-     */
-    public static function fill( array $filters = array() ){
-        $class = self::__class(true);
-        $table = self::__model();
-        $output = array();
-        $input = self::load($table,$filters);
-        foreach( $input as $data ){
-            //var_dump($data);
-            $output[] = new $class( '' , $data );
-        }
-        return $output;
+    protected static final function EmailMatch(){
+    
+        return "/^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,})$/i";
     }
     /**
      * @return \CODERS\Framework\Query
@@ -585,15 +548,13 @@ abstract class Model{
     }
     /**
      * @param string $model
-     * @param array $data
-     * @return \CODERS\Framework\Model | boolean
+     * @return string
      * @throws \Exception
      */
-    public static final function create($model, $data = array()) {
-        //$package = self::package($model);
+    private static final function __preload( $model ){
         $route = explode('.', $model);
+        $class = self::__importClass($route);
         try{
-            $class = self::__importClass($route);
             if(!class_exists($class)){
                 $path = self::__importPath($route);
                 if(file_exists($path)){
@@ -603,9 +564,8 @@ abstract class Model{
                     throw new \Exception(sprintf('Invalid path [%s]',$path) );
                 }
             }
-
-            if(class_exists($class) && is_subclass_of($class, self::class)){
-                return new $class( $route , $data );
+            if( class_exists($class) && is_subclass_of($class, self::class) ){
+                return $class;
             }
             else{
                 throw new \Exception(sprintf('Invalid Model [%s]',$class) );
@@ -614,15 +574,64 @@ abstract class Model{
         catch (\Exception $ex) {
             \CodersApp::notify($ex->getMessage());
         }
+        return '';
+    }
+
+    /**
+     * @param string $model
+     * @param array $data
+     * @return \CODERS\Framework\Model | boolean
+     * @throws \Exception
+     */
+    public static final function create($model, $data = array()) {
         
-        return null;
+        $class = self::__preload($model);
+
+        return strlen($class) ? new $class( explode('.', $model) , $data ) : null;
     }
     /**
-     * @return string
+     * @param string $model
+     * @param array $filters
+     * @return \CODERS\Framework\Model[]
      */
-    protected static final function EmailMatch(){
-    
-        return "/^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,})$/i";
+    public static function fill( $model , array $filters = array() ){
+
+        $output = array();
+        $class = self::__preload($model);
+
+        if(strlen($class)){
+            $module = explode('.', $model);
+            $table = $module[ count($module) - 1];
+            $input = self::load($table,$filters);
+            foreach( $input as $data ){
+                //var_dump($data);
+                $output[] = new $class( $module , $data );
+            }
+        }
+        return $output;
+    }
+    /**
+     * @param string $model
+     * @param string $id
+     * @param string $index
+     * @return \CODERS\Framework\Model
+     */
+    public static final function locate( $model , $id , $index = 'id' ){
+        $found = self::fill($model , array( $index => $id ) );
+        return count($found) ? $found[0] : null;
+    } 
+
+    /**
+     * @param string $model
+     * @param array $filters
+     * @param callable $callback
+     * @return array
+     */
+    public static function load( $model = '' , array $filters = array() ){
+        return self::db()->select(
+                strlen($model) ? $model : self::__model(),
+                '*' ,
+                $filters );
     }
 }
 /**

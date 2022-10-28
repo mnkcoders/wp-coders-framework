@@ -7,6 +7,9 @@ defined('ABSPATH') or die;
  * 
  */
 abstract class View{
+    const INPUT_FILE = 'file';
+    const INPUT_HIDDEN = 'hidden';
+
     /**
      * @var \CODERS\Framework\Model
      */
@@ -57,7 +60,7 @@ abstract class View{
      */
     protected function __construct( $route ) {
 
-        $this->_endpoint = explode('.', $route);
+        $this->_endpoint = is_array($route) ? $route : explode('.', $route);
     }
     /**
      * @return \CODERS\Framework\View
@@ -85,41 +88,23 @@ abstract class View{
      */
     public function __get($name) {
         switch( true ){
-            case $name === 'debug':
-                return $this->__debug();
-            case preg_match('/^has_/', $name):
-                $has = sprintf('has%s', preg_replace('/\s/', '',ucwords( preg_replace('/[\_\-]/', ' ', substr($name, 4)))));
-                return method_exists($this, $has) ? $this->$has() : false;
-            case preg_match('/^count_/', $name):
-                $count = sprintf('count%s', preg_replace('/\s/', '',ucwords( preg_replace('/[\_\-]/', ' ', substr($name, 6)))));
-                return method_exists($this, $count) ? $this->$count() : 0;
-            case preg_match('/^action_/', $name):
-                return $this->__actionUrl(substr($name, 7, strlen($name)-7));
-            case preg_match('/^admin_action_/', $name):
-                return $this->__actionUrl(substr($name, 13, strlen($name)-13),true);
-            case preg_match('/^input_/', $name):
-                return $this->__input(substr($name, 6));
-            case preg_match(  '/^list_[a-z_]*_options$/' , $name ):
-                return $this->__options(substr($name, 5, strlen($name) - 5 - 8 ) );
-            case preg_match(  '/^list_/' , $name ):
-                return $this->__list(substr($name, 5));
-            case preg_match(  '/^value_/' , $name ):
-                return $this->value(substr($name, 6));
-            case preg_match(  '/^import_/' , $name ):
-                return $this->__import(substr($name, 7));
-            case preg_match(  '/^display_/' , $name ):
-                return $this->__display(substr($name, 8));
-            case preg_match(  '/^label_/' , $name ):
-                return $this->label(substr($name, 6));
-            case preg_match(  '/^get_/' , $name ):
-                $get = substr($name, 6);
-                return $this->has($name) ? $this->_model->get($get) : '';
+            case preg_match('/^get_/', $name):
+                $get = preg_replace('/\_/', '', $name );
+                return method_exists($this, $get) ? $this->$get()  : '';
+            case preg_match('/^form_/', $name):
+                return $this->__formElement(substr($name, 5));
         }
-        return '';
+        return $this->hasModel() ? $this->_model->$name : '';
     }
-    
+    /**
+     * @param string $name
+     * @param array $arguments
+     * @return mixed
+     */
     public function __call($name, $arguments) {
         switch( true ){
+            case $name === 'dump':
+                return $this->hasModel() ? get_class($this->_model) : '';
             case $name === 'debug':
                 return $this->__debug();
             case $name === 'open_form':
@@ -132,6 +117,21 @@ abstract class View{
                             is_array($arguments[1]) ? $arguments[1] : array(),
                             count($arguments) > 2 ? $arguments[2] : null ) :
                             '<!-- empty html -->';
+            case $name === 'action' :
+                if( count( $arguments) ){
+                    return $this->__action(
+                                $arguments[0],
+                                count($arguments) > 1 && is_array($arguments[1]) ? $arguments[1] : array(),
+                                count($arguments) > 2 && is_bool($arguments[2]) ? $arguments[2] : is_admin() );
+                }
+                return sprintf('<!-- action id required -->');
+
+            case preg_match('/^action_/', $name):
+                $action = preg_replace('/[\-\_]/','.',substr($name, 7));
+                return $this->__action(
+                            $action,
+                            count($arguments) && is_array($arguments[0]) ? $arguments[0] : array(),
+                            count($arguments) > 1 && is_bool($arguments[1]) ? $arguments[1] : is_admin() );
             case preg_match('/^submit_/', $name):
                 $action = substr($name, 7);
                 $content = count($arguments) && is_string($arguments[0])? $arguments[0] : $this->__( $name);
@@ -142,36 +142,34 @@ abstract class View{
                 $content = count($arguments) && is_string($arguments[0])? $arguments[0] : $this->__( $name);
                 $attributes = count($arguments) > 1 ? $arguments[1] : $arguments[0];
                 return $this->__button($action,$content, is_array( $attributes) ? $attributes : array() );
-            case preg_match('/^action_/', $name):
-                $action = preg_replace('/[\-\_]/','.',substr($name, 7));
-                return $this->action($action,
-                            count($arguments) ? $arguments[0] : $this->label($action),
-                            count($arguments) > 1 ? $arguments[1] : array(),
-                            count($arguments) > 2 ? $arguments[2] : 'button ' . $action );
+            
+            case preg_match('/^is_/', $name):
+                return $this->hasModel() ? $this->_model->is(substr($name, 3)) : false;
+            case preg_match('/^has_/', $name):
+                return $this->hasModel() ? $this->_model->has(substr($name, 4)) : false;
+            case preg_match('/^count_/', $name):
+                return $this->hasModel() ? $this->_model->count(substr($name, 6)) : false;
             case preg_match('/^input_/', $name):
-                return $this->__inputType(
-                        substr($name, 6),
-                        count($arguments) ? $arguments[0] : '__' . $name,
+                $type = substr($name, 6);
+                return $this->__input(
+                        count($arguments) ? $arguments[0] : '_' . $type,
+                        $type,
                         count($arguments) > 1 ? $arguments[1] : array());
-            case preg_match(  '/^list_[a-z_]*_options$/' , $name ):
-                return $this->__options(substr($name, 5, strlen($name) - 5 - 8 ) );
             case preg_match(  '/^list_/' , $name ):
                 return $this->__list(substr($name, 5));
             case preg_match(  '/^value_/' , $name ):
                 return $this->value(substr($name, 6));
-            case preg_match(  '/^import_/' , $name ):
-                return $this->__import(substr($name, 7));
+            case preg_match(  '/^attribute_/' , $name ):
+                return $this->has($name) ? $this->_model->get(substr($name, 10)) : '';
+
             case preg_match(  '/^display_/' , $name ):
-                return $this->__display(substr($name, 8));
+                return $this->__display(substr($name, 8),$arguments);
             case preg_match(  '/^label_/' , $name ):
                 return $this->label(substr($name, 6));
             case $name === 'label':
                 return count($arguments) ? $this->label($arguments[0]) : '';
-            case preg_match(  '/^get_/' , $name ):
-                $get = substr($name, 6);
-                return $this->has($name) ? $this->_model->get($get) : '';
         }
-        return '';
+        return $this->hasModel() ? $this->model()->$name( $arguments ) : '';
     }
     /**
      * @param string $name
@@ -203,26 +201,32 @@ abstract class View{
     }
     /**
      * @param string $action
-     * @param boolean $admin
-     * @return string|URL
+     * @param array $params
+     * @param bool $admin
+     * @return String
      */
-    protected function __actionUrl( $action , $admin  =false ){
-        
-        $route = is_array($action) ? $action : explode('_', $action);
+    protected function __action( $action , $params = array() , $admin = false ){
 
-   
-        if( count($route) < 2 ){
-            array_unshift($route, $admin ? 'admin' : 'main' );
+        if(strlen($action) && $action !== '.' ){
+            $route = explode('.', $action);
+
+            if( count($route) < 2 ){
+                $action = strlen($route[0]) ?
+                        sprintf('.%s.%s', $this->module(), $route[0]) :
+                        '.' . $this->module();
+            }
+            elseif( count( $route) < 3 && strlen($route[0]) ){
+                $action = sprintf('.%s.%s',
+                        strlen($route[0]) ? $route[0] : $this->module(),
+                        $route[1]);                
+            }
         }
-        
-        array_unshift($route,$this->endpoint());
-        
-        return \CODERS\Framework\Request::createLink(
-                implode('.', $route),
-                array(),
-                $admin);
-    }
+        else{
+            $action = '.' . $this->module();
+        }
 
+        return Request::createLink($action, $params , $admin );
+    }
     /**
      * @return string
      */
@@ -237,43 +241,55 @@ abstract class View{
         return $path[count($path)-1];
     }
     /**
-     * @param string $action
-     * @param string $label
-     * @param array $params
-     * @param string $class
-     * @return String
+     * @return \CODERS\Framework\Model
      */
-    protected function action( $action , $label , array $params = array() , $class = 'button' ){
-        $route = explode('.', $action);
-
-        if( count( $route) < 2 ){
-            $action = $this->module() . '.' . $action;
-        }
-        if( count( $route ) < 3 ){
-            $action = '.' . $action;
-        }
-
-        $url = Request::createLink($action, $params , true );
-        
-        return Renderer::action($url, $label , array('class' => $class ) );
+    protected function model(){
+        return $this->_model;
     }
     /**
+     * @param string $name
      * @param string $type
      * @param array $atts
      * @return string|HTML
      */
-    protected function __inputType( $type , $name , array $atts = array()){
+    protected function __input( $name , $type , array $atts = array()){
+        
+        $value = isset($atts['value']) ? $atts['value'] : '';
+        
+        $options = isset( $atts['options'] ) ? $this->__list($atts['options']) : array();
+        
         switch( $type ){
-            case Model::TYPE_TEXT:
-                return Renderer::inputText($name, '', $atts);
-            case Model::TYPE_TEXTAREA:
-                return Renderer::inputTextArea($name, '', $atts);
+            case self::INPUT_FILE:
+                return Renderer::inputFile($name, $atts);
+            case self::INPUT_HIDDEN:
+                return Renderer::inputHidden($name, $value);
+            case Model::TYPE_DROPDOWN:
+                return Renderer::inputDropDown( $name, $options, $value, $atts);
+            case Model::TYPE_LIST:
+                return Renderer::inputList( $name, $options, $value, $atts );
+            case Model::TYPE_OPTION:
+                return Renderer::inputOptionList( $name, $options, $value, $atts);
+            case Model::TYPE_CHECKBOX:
+                $value = isset($atts['value']) && is_bool($atts['value']) ? $atts['value'] : false;
+                return Renderer::inputCheckBox($name, $value, 1, $atts);
+            case Model::TYPE_FLOAT:
             case Model::TYPE_NUMBER:
                 return Renderer::inputNumber($name, 0, $atts);
-            case Model::TYPE_DROPDOWN:
-                return Renderer::inputDropDown($name, $this->__list($name), null , $atts);
-            case Model::TYPE_FILE:
-                return Renderer::inputFile($name, $atts);
+            case Model::TYPE_DATE:
+            case Model::TYPE_DATETIME:
+                return Renderer::inputDate( $name, $value, $atts );
+            case Model::TYPE_EMAIL:
+                return Renderer::inputEmail( $name, $value, $atts);
+            //case Model::TYPE_TELEPHONE:
+            //    return Renderer::inputTelephone(
+            //            $name, $this->value($name),
+            //            array('class' => 'form-input'));
+            case Model::TYPE_PASSWORD:
+                return Renderer::inputPassword( $name, $atts );
+            case Model::TYPE_TEXTAREA:
+                return Renderer::inputTextArea($name, '', $atts);
+            case Model::TYPE_TEXT:
+                return Renderer::inputText($name, '', $atts);
         }
         return sprintf('<!-- invalid input type %s -->',$type);
     }
@@ -284,72 +300,25 @@ abstract class View{
      * @param string $type
      * @return String|HTML
      */
-    protected function __input( $name , $type = '' ){
+    private function __formElement( $name ){
         
         if(strlen($type) === 0 ){
             $type = $this->type($name);
         }
         
-        switch ( $type ) {
+        $atts = array(
+            'value' => $this->value($name),
+        );
+        
+        switch( $type ){
             case Model::TYPE_DROPDOWN:
-                return Renderer::inputDropDown(
-                                $name, $this->__options($name),
-                                $this->value($name),
-                                array('class' => 'form-input'));
             case Model::TYPE_LIST:
-                return Renderer::inputList(
-                                $name, $this->__options($name),
-                                $this->value($name),
-                                array('class' => 'form-input'));
             case Model::TYPE_OPTION:
-                return Renderer::inputOptionList(
-                                $name, $this->__options($name),
-                                $this->value($name),
-                                array('class' => 'form-input'));
-            case Model::TYPE_CHECKBOX:
-                return Renderer::inputCheckBox($name,
-                                $this->value($name), 1,
-                                array('class' => 'form-input'));
-            case Model::TYPE_NUMBER:
-            case Model::TYPE_FLOAT:
-                //case Model::TYPE_PRICE:
-                return Renderer::inputNumber(
-                                $name, $this->value($name),
-                                array('class' => 'form-input'));
-            case Model::TYPE_FILE:
-                return Renderer::inputFile(
-                                $name,
-                                array('class' => 'form-input'));
-            case Model::TYPE_DATE:
-            case Model::TYPE_DATETIME:
-                return Renderer::inputDate(
-                                $name, $this->value($name),
-                                array('class' => 'form-input'));
-            case Model::TYPE_EMAIL:
-                return Renderer::inputEmail(
-                                $name, $this->value($name),
-                                array('class' => 'form-input'));
-            //case Model::TYPE_TELEPHONE:
-            //    return Renderer::inputTelephone(
-            //            $name, $this->value($name),
-            //            array('class' => 'form-input'));
-            case Model::TYPE_PASSWORD:
-                return Renderer::inputPassword(
-                                $name, array('class' => 'form-input'));
-            case Model::TYPE_TEXTAREA:
-                return Renderer::inputTextArea(
-                                $name, $this->value($name),
-                                array('cass' => 'form-input'));
-            case Model::TYPE_TEXT:
-                return Renderer::inputText(
-                                $name, $this->value($name),
-                                array('class' => 'form-input',
-                                    'placeholder' => $this->meta($name, 'placeholder')));
-            default:
-                return $this->__debug() ?
-                    sprintf('<span class="error ivalid">%s not found</span>',$name):
-                    sprintf('<!-- [%s] not found -->',$name);
+                $atts['options'] = $this->hasModel() ? $this->_model->meta($name, 'options' , $name) : $name;
+                break;
         }
+        
+        return $this->__input($name, $type, $atts);
     }
     /**
      * @param string|array $class
@@ -476,36 +445,19 @@ abstract class View{
     }
     /**
      * @param string $name
-     * @return array
-     */
-    protected function __options( $name ){
-        
-        return $this->has($name) ? $this->_model->options($name) : array();
-    }
-    /**
-     * @param string $name
      * @return number
      */
     protected final function __count( $name ){
         $count = sprintf('count%s', preg_replace('/\s/', '', ucwords( preg_replace('/[\_\-]/', ' ', $name))));
-        return method_exists($this, $count) ? $this->$count() : 0;
+        return method_exists($this, $count) ? $this->$count() : $this->hasModel() ? $this->_model->count($name) : 0;
     }
-    /**
-     * @param string $name
-     * @return boolean
-     */
-    protected final function __has( $name ){
-        $has = sprintf('has%s', preg_replace('/\s/', '', ucwords( preg_replace('/[\_\-]/', ' ', $name))));
-        return method_exists($this, $has) ? $this->$has() : false;
-    }
-
     /**
      * @param string $list
      * @return array
      */
     protected function __list( $list ){
         
-        $call = 'list' . ucfirst($list);
+        $call = 'list'. preg_replace('/_/', '', ucwords($list) );
         
         if(method_exists($this, $call)){
             return $this->$call( );
@@ -519,10 +471,11 @@ abstract class View{
      */
     protected function label( $name ){
         return $this->__($name);
-        return $this->has($name) ?
-                $this->_model->meta($name,'label',$name) :
-                        $this->__($name);
     }
+    /**
+     * @param string $key
+     * @return string
+     */
     protected function __( $key ){
         return !is_null($this->_strings) ? $this->_strings->__( $key ) : $key;
     }
@@ -807,7 +760,6 @@ class Renderer{
     public static final function __( $string ){
         return \CodersApp::__($string);
     }
-
     /**
      * @param string $name
      * @param string $action

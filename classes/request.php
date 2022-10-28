@@ -237,22 +237,22 @@ class Request{
         if(strlen($route[0]) === 0 ){
             $route[0] = \CodersApp::instance()->endPoint();
         }
-        
+
         $endpoint_url = $admin ?
                 admin_url():
                 get_site_url() . '/' . $route[0];
         
         if($admin){
             $endpoint_url .= 'admin.php';
-            $args['page'] = count($route) > 1 ? $route[0] . '-'. $route[1]: $route[0];
-            if(count($route) > 2 ){
-                $args['action'] = $route[2];
+            $page = array('page' => count($route) > 1 ? $route[0] . '-'. $route[1] : $route[0] );
+            if(count($route) > 2){
+                $page['action'] = $route[2];
             }
+            $args = $page + $args;
         }
         elseif(count($route) > 1 ){
-            for( $i = 1 ; $i < count( $route ) ; $i++ ){
-                $endpoint_url .= ($i === 1 ) ? '/' . $route[$i] : '-' .$route[$i];
-            }
+            $act = array_slice($route, 1);
+            $endpoint_url .= '/' . implode('-', $act);
         }
         //var_dump($endpoint_url);
         return self::URL($args,$endpoint_url);
