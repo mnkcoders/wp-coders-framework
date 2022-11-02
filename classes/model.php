@@ -23,7 +23,7 @@ abstract class Model{
     const TYPE_HIDDEN = 'hidden';
     //
     
-    private $_module;
+    private $_path;
     /**
      * @var array
      */
@@ -36,10 +36,10 @@ abstract class Model{
      */
     protected function __construct( $route , array $data = array( ) ) {
         
-        $this->_module = is_array($route) ? $route : explode('.', $route);
+        $this->_path = is_array($route) ? $route : explode('.', $route);
         
-        if(strlen($this->_module[0]) === 0){
-            $this->_module[0] = \CodersApp::instance()->endPoint();
+        if(strlen($this->_path[0]) === 0){
+            $this->_path[0] = \CodersApp::instance()->endPoint();
         }
         
         if( count( $data ) ){
@@ -50,7 +50,7 @@ abstract class Model{
      * @return string
      */
     public function __toString() {
-        return implode('.', $this->_module);
+        return implode('.', $this->_path);
         return $this->__class();
     }
     /**
@@ -122,13 +122,12 @@ abstract class Model{
         return date('Y-m-d H:i:s');
     }
     /**
+     * @param boolean $file
      * @return string|PATH
      */
-    protected function __path(){
-        // within either sub or parent class in a static method
+    protected function __path( $file = false ){
         $ref = new \ReflectionClass(get_called_class());
-        return preg_replace('/\\\\/', '/',  dirname( $ref->getFileName() ) );
-        //return preg_replace('/\\\\/', '/', plugin_dir_path(__FILE__ ) );
+        return preg_replace('/\\\\/', '/',  $file ? $ref->getFileName() : dirname( $ref->getFileName() ) );
     }
     /**
      * @param string $email
@@ -140,17 +139,27 @@ abstract class Model{
     /**
      * @return string
      */
+    public final function context(){
+        return count( $this->_path ) > 1 ? $this->_path[1] : strtolower( $this->module() );
+    }
+
+    /**
+     * @return string
+     */
     public final function endpoint(){
-        return $this->_module[0];
+        return $this->_path[0];
     }
     /**
      * @return string
      */
     public final function module(){
-        $class = explode('\\', get_class($this));
+        $path = explode('/',  $this->__path(true));
+        return explode('.',  $path[count($path)-1] ) [0];
+        
+        /*$class = explode('\\', get_class($this));
         return count($class) > 1 ?
             $class[count($class) - 2 ] :
-            $class[count($class) - 1 ]  ;
+            $class[count($class) - 1 ]  ;*/
     }
     /**
      * @param string $element

@@ -15,7 +15,7 @@ abstract class View{
      */
     private $_model = NULL;
     private $_layout = 'default';
-    private $_endpoint = array();
+    private $_module;
     /**
      *
      * @var \CODERS\Framework\Strings
@@ -60,7 +60,7 @@ abstract class View{
      */
     protected function __construct( $route ) {
 
-        $this->_endpoint = is_array($route) ? $route : explode('.', $route);
+        $this->_module = is_array($route) ? $route : explode('.', $route);
     }
     /**
      * @return \CODERS\Framework\View
@@ -212,17 +212,17 @@ abstract class View{
 
             if( count($route) < 2 ){
                 $action = strlen($route[0]) ?
-                        sprintf('.%s.%s', $this->module(), $route[0]) :
-                        '.' . $this->module();
+                        sprintf('.%s.%s', $this->context(), $route[0]) :
+                        '.' . $this->context();
             }
             elseif( count( $route) < 3 && strlen($route[0]) ){
                 $action = sprintf('.%s.%s',
-                        strlen($route[0]) ? $route[0] : $this->module(),
+                        strlen($route[0]) ? $route[0] : $this->context(),
                         $route[1]);                
             }
         }
         else{
-            $action = '.' . $this->module();
+            $action = '.' . $this->context();
         }
 
         return Request::createLink($action, $params , $admin );
@@ -231,14 +231,20 @@ abstract class View{
      * @return string
      */
     protected function endpoint( $full = FALSE ){
-        return $full ? implode('.', $this->_endpoint) : $this->_endpoint[0];
+        return $full ? implode('.', $this->_module) : $this->_module[0];
     }
     /**
      * @return string
      */
-    protected function module(){
-        $path = explode('/',  $this->__path());
-        return $path[count($path)-1];
+    public function context(){
+        return implode('.', $this->_module);
+    }
+    /**
+     * @return string
+     */
+    public function module(){
+        $path = explode('/',  $this->__path(true));
+        return $path[count($path)-1] ;
     }
     /**
      * @return \CODERS\Framework\Model
@@ -538,10 +544,8 @@ abstract class View{
      * @return string |PATH
      */
     protected function __path(){
-        // within either sub or parent class in a static method
         $ref = new \ReflectionClass(get_called_class());
-        return preg_replace('/\\\\/', '/',  dirname( $ref->getFileName() ) );
-        //return preg_replace('/\\\\/', '/', __DIR__);
+        return preg_replace('/\\\\/', '/',  $file ? $ref->getFileName() : dirname( $ref->getFileName() ) );
     }
     /**
      * @param string $view
@@ -577,7 +581,7 @@ abstract class View{
         
         $this->addMeta( array( 'charset'=> get_bloginfo('charset')));
         $this->addMeta(array('name'=>'viewport','content' => 'width=device-width, initial-scale=1.0'));
-        $this->addBodyClass(preg_replace('/\./', '-', implode(' ', $this->_endpoint)));
+        $this->addBodyClass(preg_replace('/\./', '-', implode(' ', $this->_module)));
         
         $metas = $this->_metas;
         $links = $this->_links;

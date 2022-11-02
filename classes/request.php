@@ -15,7 +15,7 @@ class Request{
     const INPUT_REQUEST = 10;
     
     private $_endpoint = '';
-    private $_context = 'main';
+    private $_context = 'public';
     private $_action = 'default';
     private $_ts;
 
@@ -24,10 +24,12 @@ class Request{
      * @param string $request
      */
     protected function __construct( $endpoint , $request = '' ) {
+
         $this->_ts = time();
         $this->_endpoint = $endpoint;
         
         $route = explode('.', strlen($request) ? $request : '' );
+
         if( strlen($route[0]) ){
             $this->_context = $route[0];
         }
@@ -42,7 +44,7 @@ class Request{
      * @return string
      */
     public function __toString() {
-        return sprintf('%s[%s] %s.%s',
+        return sprintf('[%s] %s.%s',
                 get_class($this),
                 $this->_ts ,
                 $this->endPoint() ,
@@ -77,6 +79,23 @@ class Request{
         }
     }
     /**
+     * Retorna un valor numérico
+     * @param string $property
+     * @param int $default
+     * @return int
+     */
+    public final function getInt( $property, $default = 0 ){
+        return intval( $this->get($property, $default ) );
+    }
+    /**
+     * @param string $property Propiedad a extraer
+     * @param string $separator Separador de los valores serializados
+     * @return array
+     */
+    public final function getArray( $property, $separator = ',' ){
+        return explode($separator, $this->get($property, ''));
+    }
+    /**
      * @param int $type
      * @return array
      */
@@ -94,47 +113,21 @@ class Request{
         }
     }
     /**
-     * Retorna un valor numérico
-     * @param string $property
-     * @param int $default
-     * @return int
-     */
-    public final function getInt( $property, $default = 0 ){
-        return intval( $this->get($property, $default ) );
-    }
-    /**
-     * Retorna una lista de valores serializados
-     * @param string $property Propiedad a extraer
-     * @param string $separator Separador de los valores serializados
-     * @return array
-     */
-    public final function getArray( $property, $separator = ',' ){
-        return explode($separator, $this->get($property, ''));
-    }
-    /**
-     * Establece una cookie en WP agregando el prefijo de la aplicación para evitar colisiones
-     * 
      * @param string $cookie
      * @param mixed $value
      * @param int $time
      * @return bool
      */
     public final function setCookie( $cookie, $value = null, $time = 10 ){
-        
         if(current_filter() === 'wp' ){
-            
             $maximum = 10;
-
             if( $time > $maximum ){
-                //máximo a 50 minutos
                 $time = $maximum;
             }
-
             return setcookie(
                     self::attachPrefix($cookie,$this->_endpoint), $value,
                     time() + ( $time  * 60) );
         }
-
         return false;
     }
     /**
@@ -158,7 +151,7 @@ class Request{
     public final function action( $full = FALSE ){
         
         return $full ?
-                $this->_context.'.'.$this->_action :
+                $this->_context . '.' . $this->_action :
                 $this->_action;
     }
     /**
@@ -176,39 +169,21 @@ class Request{
                 $this->_endpoint;
     }
     /**
-     * @return boolean
-     */
-    //public final function isAdmin(){ return is_admin(); }
-    /**
-     * @param array $args
-     * @return String
-     */
-    public static final function parseUrlArgs( array $args ){
-        
-        $output = array();
-        
-        foreach( $args as $var => $val ){
-            $output[] = sprintf('%s=%s',$var,$val);
-        }
-        
-        return implode('&', $output);
-    }
-    /**
-     * @param array $request
+     * @param array $arguments
      * @param boolean $is_admin
      * @return string|URL
      */
     public function getUrl( ){
 
-        $request = array();
+        $arguments = array();
         
         $is_admin = is_admin();
         $url = $is_admin ? admin_url() : get_site_url();
         
         if( $is_admin ){
             // admin-page = endpoint-controller
-            $request['page'] = $this->endPoint() .'-'. $this->context();
-            $request['action'] = $this->action();
+            $arguments['page'] = $this->endPoint() .'-'. $this->context();
+            $arguments['action'] = $this->action();
             $url .=  'admin.php';
         }
         else{
@@ -223,16 +198,17 @@ class Request{
             $url .= sprintf( '/%s/%s/' , $this->endPoint() , implode('-' , $route ) );
         }
         
-        return self::URL( $request , $url );
+        return self::URL(  $url , $arguments );
     }
     /**
      * @param string $action
-     * @param array $args
+     * @param array $arguments
      * @param boolean $admin
      * @return string
      */
-    public static final function createLink( $action , array $args = array() , $admin = false ){
-        $route = explode('.', $action);
+    public static final function createLink( $action , array $arguments = array() , $admin = false ){
+        
+        $route = is_array($action) ? $action : explode('.', $action);
         
         if(strlen($route[0]) === 0 ){
             $route[0] = \CodersApp::instance()->endPoint();
@@ -248,21 +224,21 @@ class Request{
             if(count($route) > 2){
                 $page['action'] = $route[2];
             }
-            $args = $page + $args;
+            $arguments = $page + $arguments;
         }
         elseif(count($route) > 1 ){
             $act = array_slice($route, 1);
             $endpoint_url .= '/' . implode('-', $act);
         }
         //var_dump($endpoint_url);
-        return self::URL($args,$endpoint_url);
+        return self::URL($endpoint_url,$arguments);
     }
     /**
-     * @param array $params
      * @param string $url
+     * @param array $params
      * @return String|URL
      */
-    public static final function URL( array $params , $url = '' ){
+    public static final function URL(  $url = '' , array $params = array() ){
 
         $serialized = array();
         if(strlen($url) === '' ){
@@ -349,6 +325,14 @@ class Response extends Request{
         return $this->response($name, count($arguments) ? $arguments : array());
     }
     /**
+     * @param boolean $file
+     * @return string |PATH
+     */
+    protected function __path( $file = false ){
+        $ref = new \ReflectionClass(get_called_class());
+        return preg_replace('/\\\\/', '/',  $file ? $ref->getFileName() : dirname( $ref->getFileName() ) );
+    }
+    /**
      * Preload all core and instance components
      * @return \CODERS\Framework\Request
      */
@@ -382,6 +366,19 @@ class Response extends Request{
         return $this;
     }
     /**
+     * @return string
+     */
+    public function request(){
+        return $this->endPoint() . '.' . $this->action(true);
+    }
+    /**
+     * @return string
+     */
+    protected function module(){
+        $path = explode('/',  $this->__path(true));
+        return explode('.',  $path[count($path)-1] ) [0];
+    }
+    /**
      * @param string $component
      * @return \CODERS\Framework\Request
      */
@@ -409,7 +406,7 @@ class Response extends Request{
                 return new $class( $request->endPoint() ,$request->action(true));
             }
             elseif (\CodersApp::debug()) {
-                \CodersApp::notify(sprintf('Invalid context class %s', $class), 'error');
+                \CodersApp::notify(sprintf('Invalid Response [%s]', $class), 'error');
             }
         }
         elseif (\CodersApp::debug()) {
@@ -483,18 +480,10 @@ class Response extends Request{
      */
     protected function default_action( array $args = array() ){
         
-        $view = $this->importView('main');
-        if( !is_null($view) ){
-            $view->show();
-            return TRUE;
-        }
-        else{
-            return $this->error_action( array(
-                'error' => sprintf('invalid view for [%s]', strval($this)),
-            ) );
-        }
+        //printf(strval($this));
+        var_dump($args);
 
-        return FALSE;
+        return TRUE;
     }
     /**
      * Write the response/output

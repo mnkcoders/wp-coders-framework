@@ -43,6 +43,7 @@ abstract class CodersApp{
      */
     protected function __construct(  ) {
 
+        
     }
     /**
      * @return string
@@ -177,6 +178,19 @@ abstract class CodersApp{
                 }
                 break;
         }
+    }
+    /**
+     * @param string $type
+     * @param array $args
+     * @return \CodersApp
+     */
+    protected final function service( $type , array $args = array() ){
+
+        if(class_exists('\CODERS\Framework\Service')){
+            \CODERS\Framework\Service::run($type, $args );
+        }
+        
+        return $this;
     }
     /**
      * @param string $service
@@ -471,13 +485,15 @@ abstract class CodersApp{
      */
     protected function response($route = '') {
         
-        $this->preload();
+        $this->preload()->service('start');
 
         $context = is_admin() && strlen($route) === 0 ? 'admin' : preg_replace('/-/', '.', $route);
 
         \CODERS\Framework\Request::import(
                 $this->endPoint(),
                 $context)->route()->response();
+        
+        $this->service('complete');
     }
     /**
      * @param string $component
