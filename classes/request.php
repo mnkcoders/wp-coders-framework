@@ -7,16 +7,19 @@ defined('ABSPATH') or die;
  */
 class Request{
     
+    const CONTEXT = 'public';
+    const ACTION = 'default';
+    
     const INPUT_GET = INPUT_GET;
     const INPUT_POST = INPUT_POST;
     const INPUT_SERVER = INPUT_SERVER;
     const INPUT_COOKIE = INPUT_COOKIE;
     const INPUT_SESSION = INPUT_SESSION;
     const INPUT_REQUEST = 10;
-    
+
     private $_endpoint = '';
-    private $_context = 'public';
-    private $_action = 'default';
+    private $_context = self::CONTEXT;
+    private $_action = self::ACTION;
     private $_ts;
 
     /**
@@ -37,7 +40,7 @@ class Request{
             $this->_action =  $route[1];
         }
         elseif(is_admin()){
-            $this->_action = $this->get('action', 'default', INPUT_GET);
+            $this->_action = $this->get('action', self::ACTION, INPUT_GET);
         }
     }
     /**
@@ -188,11 +191,11 @@ class Request{
         }
         else{
             $route = array();
-            if( $this->action() !== 'default' ){
+            if( $this->action() !== self::ACTION ){
                 $route[] = $this->context();
                 $route[] = $this->action();
             }
-            elseif($this->context() !== 'main' ){
+            elseif($this->context() !== self::CONTEXT ){
                 $route[] = $this->context();
             }
             $url .= sprintf( '/%s/%s/' , $this->endPoint() , implode('-' , $route ) );
