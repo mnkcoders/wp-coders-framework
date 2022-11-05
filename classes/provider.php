@@ -5,7 +5,7 @@ defined('ABSPATH') or die;
 abstract class Provider{
     
     private $_elements = array(
-        
+        //
     );
     
     protected function __construct( array $data = array( ) ) {
@@ -17,19 +17,27 @@ abstract class Provider{
      * @param string $id
      * @return string
      */
-    protected static final function generateId( $id = 0 ){
+    protected static function generateId( $id = 0 ){
         return md5( uniqid( date( 'YmdHis' ) . $id , true ) );
     }
-
+    
     /**
      * @param string $setting
      * @param mixed $value
      * @return \CODERS\Framework\Provider
      */
-    protected function define( $setting , $value = '' ){
+    protected function set( $setting , $value = '' ){
         $this->_elements[$setting] = $value;
         return $this;
     }
+    /**
+     * @param string $name
+     * @return boolean
+     */
+    protected function has( $name ){
+        return array_key_exists($name, $this->_elements);
+    }
+
     /**
      * @return array
      */
@@ -47,8 +55,9 @@ abstract class Provider{
      */
     private final function __import( array $data = array()){
         foreach( $data as $var => $val ){
-            if(array_key_exists($var, $this->_elements)){
-                $this->_elements[$var] = $val;
+            if($this->has($var)){
+                $this->set($var, $val);
+                //$this->_elements[$var] = $val;
             }
         }
     }
@@ -68,6 +77,16 @@ abstract class Provider{
     }
     /**
      * @param string $name
+     * @param mixed $value
+     */
+    public function __set($name, $value) {
+        if( $this->has($name)){
+            $this->set($name, $value);
+        }
+    }
+
+    /**
+     * @param string $name
      * @param array $arguments
      * @return mixed
      */
@@ -84,7 +103,7 @@ abstract class Provider{
         $path = explode('.', $provider);
         $root = count($path) > 1 ? \CodersApp::path($path[0]) : \CodersApp::path();
         $pr = count($path) > 1 ? $path[1] : $path[0];
-        return sprintf('%scomponents/providers/%s.php', $root , $pr);
+        return sprintf('%s/components/providers/%s.php', $root , $pr);
     }
     /**
      * @return String
@@ -109,7 +128,6 @@ abstract class Provider{
     public static final function create( $provider , array $data = array()){
         
         $class = self::__contextClass($provider);
-        
         //var_dump($class);
         
         if( !class_exists($class)){

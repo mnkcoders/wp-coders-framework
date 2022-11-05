@@ -23,7 +23,7 @@ abstract class Model{
     const TYPE_HIDDEN = 'hidden';
     //
     
-    private $_path;
+    private $_module;
     /**
      * @var array
      */
@@ -31,16 +31,17 @@ abstract class Model{
         //define model data
     );
     /**
-     * @param string|array $route
      * @param array $data
      */
-    protected function __construct( $route , array $data = array( ) ) {
+    //protected function __construct( $route , array $data = array( ) ) {
+    protected function __construct( array $data = array( ) ) {
         
-        $this->_path = is_array($route) ? $route : explode('.', $route);
+        /*$this->_module = is_array($route) ? $route : explode('.', $route);
         
-        if(strlen($this->_path[0]) === 0){
-            $this->_path[0] = \CodersApp::instance()->endPoint();
-        }
+        if(strlen($this->_module[0]) === 0){
+            $this->_module[0] = \CodersApp::instance()->endPoint();
+        }*/
+        $this->_module = $this->__extractModule();
         
         if( count( $data ) ){
             $this->import($data);
@@ -50,7 +51,7 @@ abstract class Model{
      * @return string
      */
     public function __toString() {
-        return implode('.', $this->_path);
+        return implode('.', $this->_module);
         return $this->__class();
     }
     /**
@@ -73,18 +74,36 @@ abstract class Model{
     protected static final function __model(){
         return strtolower( preg_replace('/Model$/', '', self::__class()));
     }
+    protected function dataSource(){
+        return $this->module();
+    }
     /**
      * @param string $name
      * @param mixede $value
      */
     public function __set($name, $value) {
-        $this->__setValue($name, $value);
+        $this->change($name, $value,true);
     }
+    /**
+     * @param string $attribute
+     * @param mixed $value
+     * @return \CODERS\Framework\Model
+     */
+    protected final function __reset( $attribute , $value = '' ){
+        foreach( $this->elements() as $element ){
+            if( $this->has($element,$attribute)){
+                $this->set($element, $attribute, $value);
+            }
+        }
+        return $this;
+    }
+
     /**
      * @param string $name
      * @return mixed
      */
     public function __get($name) {
+        // content_data => getContentData()
         $get = sprintf('get%s',preg_replace('/\s/', '',ucwords( preg_replace('/[\_\-]/', ' ', $name ) ) ) );
         return method_exists($this, $get) ? $this->$get() : $this->value($name);
     }
@@ -109,6 +128,10 @@ abstract class Model{
                 return $this->count(substr($name, 6));
             case preg_match(  '/^list_/' , $name ):
                 return $this->list(substr($name, 5));
+            case preg_match('/^increase_/', $name):
+                return $this->increase(substr($name, 9), count($arguments) && is_numeric($arguments[0]) ? $arguments[0] : 1 );
+            case preg_match('/^decrease_/', $name):
+                return $this->increase(substr($name, 9), count($arguments) && is_numeric($arguments[0]) ? -$arguments[0] : -1 );
             default:
                 return $name;
         }
@@ -130,36 +153,45 @@ abstract class Model{
         return preg_replace('/\\\\/', '/',  $file ? $ref->getFileName() : dirname( $ref->getFileName() ) );
     }
     /**
+     * 
+     */
+    private function __extractModule(){
+        $path = $this->__path(true);
+        $route = explode('/components/models/', $path);
+        return count($route) > 1 ? array(
+                substr($route[0], strrpos($route[0], '/')+1),
+                preg_replace('/.php$/', '',  substr($route[1], strrpos($route[1], '/'))),
+            ) : '';
+    }
+    /**
      * @param string $email
      * @return boolean
      */
-    protected function __matchEmail( $email ){
+    protected function matchEmail( $email ){
          return !preg_match("/^([a-z0-9\+_\-]+)(\.[a-z0-9\+_\-]+)*@([a-z0-9\-]+\.)+[a-z]{2,6}$/ix", $email) ? FALSE : TRUE;
     }
     /**
      * @return string
      */
     public final function context(){
-        return count( $this->_path ) > 1 ? $this->_path[1] : strtolower( $this->module() );
+        return $this->module();
+        //return count( $this->_module ) > 1 ? $this->_module[1] : $this->_module[0];
     }
 
     /**
      * @return string
      */
     public final function endpoint(){
-        return $this->_path[0];
+        return $this->_module[0];
     }
     /**
+     * @param bool $full
      * @return string
      */
-    public final function module(){
-        $path = explode('/',  $this->__path(true));
-        return explode('.',  $path[count($path)-1] ) [0];
-        
-        /*$class = explode('\\', get_class($this));
-        return count($class) > 1 ?
-            $class[count($class) - 2 ] :
-            $class[count($class) - 1 ]  ;*/
+    public final function module( $full = false ){
+        return $full ?
+                implode('.', $this->_module) :
+                        (count($this->_module) > 1 ? $this->_module[1] : $this->_module[0]);
     }
     /**
      * @param string $element
@@ -258,7 +290,8 @@ abstract class Model{
                     return FALSE !== $value; //check it's a number
                 case self::TYPE_EMAIL:
                     //validate email
-                    return preg_match( self::EmailMatch() , $value) > 0;
+                    return $this->matchEmail($value);
+                    //return preg_match( self::matchEmail() , $value) > 0;
                 //case self::TYPE_TEXT:
                 default:
                     $size = $this->get($element, 'size' , 1 );
@@ -278,7 +311,7 @@ abstract class Model{
      */
     public function import( array $data ){
         foreach( $data as $element => $value ){
-            $this->__setValue($element, $value);
+            $this->change($element, $value);
         }
         return $this;
     }
@@ -354,6 +387,25 @@ abstract class Model{
     }
     /**
      * @param string $name
+     * @param int $amount
+     * @return int
+     */
+    public function increase( $name , $amount = 1 ){
+        if( $this->has($name) ){
+            switch( $this->type($name)){
+                case self::TYPE_FLOAT:
+                case self::TYPE_CURRENCY:
+                case self::TYPE_NUMBER:
+                    $value = $this->value($name) + $amount;
+                    $this->change($name, $value , true );
+                    return $value;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * @param string $name
      * @return array
      */
     public function list( $name ){
@@ -390,23 +442,6 @@ abstract class Model{
         }
         return $this;
     }
-    /**
-     * @param string $element
-     * @param mixed $value
-     * @return \CODERS\Framework\Model
-     */
-    private final function __setValue( $element , $value ){
-        if(strlen($element)){
-            $set = 'set' . ucfirst($element);
-            if(method_exists($this, $set)){
-                $this->$set( $value );
-            }
-            elseif( $this->has($element)){
-                $this->set($element, 'value', $value);
-            }
-        }
-    }
-
     /**
      * @param string $element
      * @param mixed $value
@@ -479,62 +514,14 @@ abstract class Model{
         return $updated;
     }
     /**
-     * @return string
-     */
-    protected static final function EmailMatch(){
-    
-        return "/^[_a-z0-9-]+(\.[_a-z0-9-]+)*@[a-z0-9-]+(\.[a-z0-9-]+)*(\.[a-z]{2,})$/i";
-    }
-    /**
      * @return \CODERS\Framework\Query
      */
-    protected static final function newQuery(){
-        return self::db();
-        //return new Query($this->endpoint());
-    }
-    /**
-     * @return \CODERS\Framework\Query
-     */
-    protected static final function db(){
-        $endpoint = \CodersApp::instance()->endPoint();
-        return new Query($endpoint);
-    }
-    /**
-     * @param string $request
-     * @return array
-     */
-    private static final function package( $request ){
-        $package = explode('.', $request);
-        if( count( $package) > 1 ){
-            /**
-             * Import plugin logics model from components
-             */
-            return array(
-                'path' => sprintf('%s/components/models/%s.php',
-                    strtolower($package[0]), //plugin / endpoint
-                    strtolower($package[1])), //model
-                'class' => sprintf('\CODERS\%s\%sModel',
-                    $package[0],
-                    $package[1]),
-            );
-        }
-        else{
-            /**
-             * Import root component model
-             */
-            return array(
-                'path' => sprintf('%s/components/models/%s.php',
-                    \CodersApp::path(), strtolower( $package[0] ) ),
-                'class' => sprintf('\CODERS\Framework\Models\%sModel',$package[0])
-            );
-        }
-    }
+    protected final function db(){ return new Query($this->endpoint()); }
     /**
      * @param array $route
      * @return string
      */
     private static final function __importClass( array $route ){
-        //$route = explode('.', $route);
         return count($route) > 1 ?
                     sprintf('\CODERS\%s\%sModel',
                             \CodersApp::Class($route[0]),
@@ -596,51 +583,65 @@ abstract class Model{
         
         $class = self::__preload($model);
 
-        return strlen($class) ? new $class( explode('.', $model) , $data ) : null;
+        return strlen($class) ? new $class( $data ) : null;
     }
     /**
-     * @param string $model
+     * @param string $source
      * @param array $filters
      * @return \CODERS\Framework\Model[]
      */
-    public static function fill( $model , array $filters = array() ){
+    public static function fill( $source , array $filters = array() ){
 
         $output = array();
-        $class = self::__preload($model);
+        $class = self::__preload($source);
 
         if(strlen($class)){
-            $module = explode('.', $model);
-            $table = $module[ count($module) - 1];
-            $input = self::load($table,$filters);
-            foreach( $input as $data ){
+            foreach( self::load($source,$filters) as $row ){
                 //var_dump($data);
-                $output[] = new $class( $module , $data );
+                $output[] = new $class( $row );
             }
         }
         return $output;
     }
     /**
-     * @param string $model
+     * @param string $source
+     * @param array $collection
+     * @return \CODERS\Framework\Model[]
+     */
+    public static final function fillV2( $source , array $collection ){
+        $output = array();
+        $class = self::__preload($source);
+        if (strlen($class)) {
+            foreach ($collection as $row) {
+                $output[] = new $class($row);
+            }
+        }
+        return $output;
+    }
+
+    /**
+     * @param string $source
      * @param string $id
      * @param string $index
      * @return \CODERS\Framework\Model
      */
-    public static final function locate( $model , $id , $index = 'id' ){
-        $found = self::fill($model , array( $index => $id ) );
+    public static final function locate( $source , $id , $index = 'id' ){
+        $found = self::fill($source , array( $index => $id ) );
         return count($found) ? $found[0] : null;
     } 
-
     /**
-     * @param string $model
+     * @param string $source
      * @param array $filters
      * @param callable $callback
      * @return array
      */
-    public static function load( $model = '' , array $filters = array() ){
-        return self::db()->select(
-                strlen($model) ? $model : self::__model(),
-                '*' ,
-                $filters );
+    public static function load( $source = '' , array $filters = array() ){
+        $module = explode('.', $source);
+        if( count( $module ) > 1 ){
+            $db = new Query($module[0]);
+            return $db->select( $module[1], '*' , $filters );
+        }
+        return array();
     }
 }
 /**
@@ -670,8 +671,9 @@ final class Query {
      * @return \CODERS\Framework\Query
      */
     private final function checkErrors(){
-        if( strlen( $this->db()->last_error ) ){
-            \CodersApp::notify($db->last_error,'error', is_admin(),true);
+        $last_error = $this->db()->last_error;
+        if( strlen( $last_error ) ){
+            \CodersApp::notify($last_error,'error', is_admin(),true);
         }
         return $this;
     }
@@ -696,9 +698,10 @@ final class Query {
     
     /**
      * @param array $filters
+     * @param string $join
      * @return array
      */
-    private final function where(array $filters) {
+    private final function where( array $filters , $join = 'AND' ) {
         
         $where = array();
 
@@ -719,7 +722,7 @@ final class Query {
             }
         }
 
-        return $where;
+        return implode($join, $where);
     }
 
     /**
@@ -750,7 +753,7 @@ final class Query {
         $select[] = sprintf("FROM `%s`", $this->table($table) );
         
         if (count($filters)) {
-            $select[] = " WHERE " . implode(' AND ', $this->where($filters ) );
+            $select[] = " WHERE " . $this->where($filters );
         }
         
         return $this->query( implode(' ', $select) , $index );
@@ -785,11 +788,10 @@ final class Query {
         
         $sql_insert = sprintf('INSERT INTO `%s` (%s) VALUES (%s)',
                 $this->table($table),
-                implode(',', $columns),
+                sprintf('`%s`', implode('`,`', $columns)),
                 implode(',', $values));
         
         $result = $db->query($sql_insert);
-        
         $this->checkErrors();
         
         return FALSE !== $result ? $result : 0;
@@ -827,7 +829,6 @@ final class Query {
                 $this->where($filters));
         
         $result = $db->query($sql_update);
-        
         $this->checkErrors();
         
         return FALSE !== $result ? $result : 0;
@@ -987,7 +988,7 @@ final class Query {
         foreach( $schema as $table => $data ){
 
             if( $this->__tableExists($table)){
-                \CodersApp::notify(sprintf('<p>%s already exists</p>',$this->table($table)),'warning',true,true);
+                \CodersApp::notify(sprintf('%s already exists',$this->table($table)),'warning',true,true);
             }
             else{
                 $create = $this->__createTable($table, $data);

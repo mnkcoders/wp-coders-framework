@@ -60,7 +60,8 @@ abstract class View{
      */
     protected function __construct( $route ) {
 
-        $this->_module = is_array($route) ? $route : explode('.', $route);
+        //$this->_module = is_array($route) ? $route : explode('.', $route);
+        $this->_module = $this->__extractModule();
     }
     /**
      * @return \CODERS\Framework\View
@@ -240,11 +241,15 @@ abstract class View{
         return implode('.', $this->_module);
     }
     /**
+     * @param bool $full
      * @return string
      */
-    public function module(){
-        $path = explode('/',  $this->__path(true));
-        return $path[count($path)-1] ;
+    public function module( $full = false ){
+        return $full ? 
+                implode('.', $this->_module):
+                $this->_module[0] ;
+        //$path = explode('/',  $this->__path(true));
+        //return $path[count($path)-1] ;
     }
     /**
      * @return \CODERS\Framework\Model
@@ -408,11 +413,12 @@ abstract class View{
     protected function openForm( array $args ){
         if( count($args) && $this->_activeForm  === '' ){
             $name = $args[0];
+            $admin = count($args) > 4 ? is_bool( $args[4] ) && $args[4] : is_admin();
             $action = count($args) > 1 ?
-                    Request::createLink($args[1] , array() , true) :
+                    Request::createLink($args[1] , array() , $admin) :
                     filter_input(INPUT_SERVER, 'PHP_SELF' );
             $method = count($args) > 2 ? $args[2] : 'post';
-            $type = count($args) > 3 ? $args[3] : Renderer::FORM_TYPE_PLAIN;
+            $type = count($args) > 3 && strlen($args[3]) ? $args[3] : Renderer::FORM_TYPE_ENCODED;
             
             $this->_activeForm = $name;
             return sprintf('<!-- opening form [%s] --><form name="%s" method="%s" action="%s" encType="%s">',
@@ -541,11 +547,22 @@ abstract class View{
         return $this;
     }
     /**
+     * 
+     */
+    private function __extractModule(){
+        $path = $this->__path();
+        $route = explode('/components/views/', $path);
+        return count($route) > 1 ? array(
+                substr($route[0], strrpos($route[0], '/') + 1),
+                preg_replace('/.php$/', '',  substr($route[1], strrpos($route[1], '/'))),
+            ) : '';
+    }
+    /**
      * @return string |PATH
      */
     protected function __path(){
         $ref = new \ReflectionClass(get_called_class());
-        return preg_replace('/\\\\/', '/',  $file ? $ref->getFileName() : dirname( $ref->getFileName() ) );
+        return preg_replace('/\\\\/', '/',  dirname( $ref->getFileName() ) );
     }
     /**
      * @param string $view

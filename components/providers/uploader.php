@@ -14,7 +14,7 @@ class Uploader extends \CODERS\Framework\Provider{
      */
     protected function __construct(array $data = array()) {
 
-        parent::define('storage');
+        parent::set('storage');
         parent::__construct($data);
     }
     /**

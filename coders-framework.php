@@ -237,7 +237,8 @@ abstract class CodersApp{
             elseif(self::exists($endpoint)){
                 self::$_instance = self::importAdminApp($endpoint);
                 if( !is_null(self::$_instance)){
-                    self::$_instance->response( $context );
+                    self::$_instance->response( strlen($context) ? preg_replace('/-/', '.', $context ) : 'admin' );
+                    self::dumpLog();
                 }
                 else{
                     self::notify(sprintf('Invalid Endpoint Boot [%s]',$endpoint), 'error');
@@ -255,7 +256,6 @@ abstract class CodersApp{
      */
     private static final function __runEndpoint( $endpoint , $context = '' ){
         if ( self::exists($endpoint)) {
-            $action = get_query_var( $endpoint , '' );
             switch( self::type($endpoint)){
                 case 'system':
                     if( self::debug()){
@@ -264,22 +264,24 @@ abstract class CodersApp{
                     break;
                 case 'callable':
                     $call = self::__callable($endpoint);
-                    $call( $action );
+                    $call( $context );
                     break;
                 case 'application':
                     if(is_null(self::$_instance)){
                         self::$_instance = self::load($endpoint,'application');
                         if( !is_null(self::$_instance) ){
-                            self::$_instance->response($action);
+                            self::$_instance->response(preg_replace('/-/', '.', $context));
                         }
                     }
                     break;
             }
+            self::dumpLog();
         }
     }
-    
+    /**
+     * @param string $endpoint
+     */
     protected static final function __registerRest( $endpoint ){
-
         add_action('rest_api_init', function () use($endpoint) {
             register_rest_route( sprintf('sprintf/%s/v1',$endpoint), '/context/action', array(
                 'methods' => 'GET',
@@ -292,7 +294,6 @@ abstract class CodersApp{
                 },
             ));
         });
-
     }
 
     /**
@@ -312,7 +313,6 @@ abstract class CodersApp{
         }
     }
     /**
-     * Register an application instance into the admin menu
      * @param string $endpoint
      */
     protected static final function __registerAdmin( $endpoint ){
@@ -483,15 +483,13 @@ abstract class CodersApp{
     /**
      * @param String $route 
      */
-    protected function response($route = '') {
+    protected function response($route = '' ) {
         
         $this->preload()->service('start');
 
-        $context = is_admin() && strlen($route) === 0 ? 'admin' : preg_replace('/-/', '.', $route);
-
         \CODERS\Framework\Request::import(
                 $this->endPoint(),
-                $context)->route()->response();
+                $route)->route()->response();
         
         $this->service('complete');
     }
@@ -671,7 +669,8 @@ abstract class CodersApp{
             $app->require('model')->preload()->install();
         }
 
-        self::notify( self::path($endpoint ) , 'info' , true ,  $endpoint.'_install');
+        self::notify( self::path($endpoint ) , 'info' , true ,  true );
+        self::dumpLog();
     }
     /**
      * 
@@ -693,7 +692,8 @@ abstract class CodersApp{
             $app->require('model')->preload()->uninstall();
         }
 
-        self::notify( self::path($endpoint ) , 'info' , true , $endpoint.'_uninstall');
+        self::notify( self::path($endpoint ) , 'info' , true , true);
+        self::dumpLog();
     }
     /**
      * @return \CodersApp
@@ -703,6 +703,26 @@ abstract class CodersApp{
         //     * Fill in all uninstall routines
         
         return $this;
+    }
+    /**
+     * 
+     */
+    public static final function dumpLog(){
+        if( self::debug() && count( self::$_messages )){
+            $path = self::__pluginDir(true) . '/log/debug.html';
+            $handle = fopen($path, 'a');
+            $ts = date('Y-m-d H:i:s');
+            if( $handle ){
+                $content = array();
+                foreach( self::$_messages as $type => $messages ){
+                    foreach( $messages as $text ){
+                        $content[] = sprintf('<p>[ <i>%s</i> ] <strong class="%s"> %s </strong></p>',$ts, $type,$text);
+                    }
+                }
+                fwrite($handle, implode("\n", $content) . "\n");
+                fclose($handle);
+            }
+        }
     }
     /**
      * @param string $message
@@ -776,20 +796,18 @@ abstract class CodersApp{
                         $wp->add_query_var($endpoint);
                     }
                     /*SETUP RESPONSE*/
-                    add_action( 'template_redirect', function(){
-                        $route = (function(){
-                            global $wp_query;
-                            foreach (CodersApp::list() as $endpoint ){
-                                if(array_key_exists($endpoint, $wp_query->query ) ){
-                                    $wp_query->set('is_404', FALSE);
-                                    return $endpoint;
-                                }
+                    add_action('template_redirect', function() {
+                        global $wp_query;
+                        $endpoint = '';
+                        foreach (CodersApp::list() as $app) {
+                            if (array_key_exists($app, $wp_query->query)) {
+                                $endpoint = $app;
+                                break;
                             }
-                            return '';
-                        })();
-                        
-                        if (strlen($route) > 0) {
-                            CodersApp::run_endpoint($route);
+                        }
+                        if(strlen($endpoint)){
+                            $wp_query->set('is_404', FALSE);
+                            CodersApp::run_endpoint($endpoint,$wp_query->get($endpoint, ''));
                             exit;
                         }
                     } , 10 );

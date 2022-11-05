@@ -116,22 +116,24 @@ class Request{
         }
     }
     /**
-     * @param string $cookie
+     * @param string $name
      * @param mixed $value
      * @param int $time
      * @return bool
      */
-    public final function setCookie( $cookie, $value = null, $time = 10 ){
-        if(current_filter() === 'wp' ){
-            $maximum = 10;
-            if( $time > $maximum ){
-                $time = $maximum;
-            }
-            return setcookie(
-                    self::attachPrefix($cookie,$this->_endpoint), $value,
-                    time() + ( $time  * 60) );
-        }
-        return false;
+    public final function setCookie( $name, $value = null, $time = 10 ){
+        $elapsed = time() + ( $time  * 60);
+        $cookie = preg_replace('/\-/', '_', $this->endPoint()) . '_' . $name;
+        return setcookie( $cookie, $value,$elapsed);
+    }
+    /**
+     * @param string $name
+     * @param string $default
+     * @return string
+     */
+    public final function cookie( $name , $default = '' ){
+        $cookie = preg_replace('/\-/', '_', $this->endPoint()) . '_' . $name;
+        return $this->get($cookie,$default,self::INPUT_COOKIE);
     }
     /**
      * @return int WP User ID
@@ -223,7 +225,7 @@ class Request{
         
         if($admin){
             $endpoint_url .= 'admin.php';
-            $page = array('page' => count($route) > 1 ? $route[0] . '-'. $route[1] : $route[0] );
+            $page = array('page' => count($route) > 1 && $route[1] !== 'admin' ? $route[0] . '-'. $route[1] : $route[0] );
             if(count($route) > 2){
                 $page['action'] = $route[2];
             }
@@ -446,7 +448,7 @@ class Response extends Request{
      */
     protected final function importProvider( $provider , array $data = array( ) ){
         return  class_exists('\CODERS\Framework\Provider') ?
-                \CODERS\Framework\Provider::create($provider, $data) :
+                \CODERS\Framework\Provider::create(preg_replace('/^\./', $this->endPoint() . '.' , $provider), $data) :
                         null;
     }
     /**
@@ -492,7 +494,7 @@ class Response extends Request{
      * Write the response/output
      * @return boolean
      */
-    public final function response( $action = '' ){
+    public function response( $action = '' ){
         
         if( strlen($action) === 0 ){
             $action = $this->action();
