@@ -709,7 +709,11 @@ abstract class CodersApp{
      */
     public static final function dumpLog(){
         if( self::debug() && count( self::$_messages )){
-            $path = self::__pluginDir(true) . '/log/debug.html';
+            $path = self::__pluginDir(true) . '/log';
+            if(!file_exists($path)){
+                mkdir($path);
+            }
+            $path .= '/debug.html';
             $handle = fopen($path, 'a');
             $ts = date('Y-m-d H:i:s');
             if( $handle ){
