@@ -17,7 +17,6 @@ abstract class View{
     private $_layout = 'default';
     private $_module;
     /**
-     *
      * @var \CODERS\Framework\Strings
      */
     private $_strings = null;
@@ -54,11 +53,10 @@ abstract class View{
      * @var array List all body classes here
      */
     private $_classes = array('coders-framework');
-
     /**
      * @param string $route
      */
-    protected function __construct( $route ) {
+    protected function __construct( ) {
 
         //$this->_module = is_array($route) ? $route : explode('.', $route);
         $this->_module = $this->__extractModule();
@@ -72,7 +70,6 @@ abstract class View{
         }
         return $this;
     }
-
     /**
      * @return String
      */

@@ -341,7 +341,7 @@ class Response extends Request{
      * Preload all core and instance components
      * @return \CODERS\Framework\Request
      */
-    private final function preload( ){
+    protected final function preload( ){
         foreach( $this->_components as $component ){
             if(strlen($component)){
                 $route = explode('.', $component);
