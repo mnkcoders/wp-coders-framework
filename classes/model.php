@@ -141,8 +141,8 @@ abstract class Model{
     /**
      * @return string
      */
-    protected static function __ts(){
-        return date('Y-m-d H:i:s');
+    protected static function __ts( $format = true ){
+        return $format ? date('Y-m-d H:i:s') : date('YmdHis');
     }
     /**
      * @param boolean $file
