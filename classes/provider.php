@@ -4,7 +4,7 @@ defined('ABSPATH') or die;
 
 abstract class Provider{
     
-    private $_elements = array(
+    private $_content = array(
         //
     );
     
@@ -27,7 +27,7 @@ abstract class Provider{
      * @return \CODERS\Framework\Provider
      */
     protected function set( $setting , $value = '' ){
-        $this->_elements[$setting] = $value;
+        $this->_content[$setting] = $value;
         return $this;
     }
     /**
@@ -35,20 +35,20 @@ abstract class Provider{
      * @return boolean
      */
     protected function has( $name ){
-        return array_key_exists($name, $this->_elements);
+        return array_key_exists($name, $this->_content);
     }
 
     /**
      * @return array
      */
     public final function elements(){
-        return array_keys($this->_elements);
+        return array_keys($this->_content);
     }
     /**
      * @return array
      */
     public final function values(){
-        return $this->_elements;
+        return $this->_content;
     }
     /**
      * @param array $data
@@ -73,7 +73,7 @@ abstract class Provider{
      * @return mixed
      */
     public function __get($name) {
-        return array_key_exists($name, $this->_elements) ? $this->_elements[$name] : '';
+        return array_key_exists($name, $this->_content) ? $this->_content[$name] : '';
     }
     /**
      * @param string $name
@@ -108,7 +108,7 @@ abstract class Provider{
     /**
      * @return String
      */
-    private static final function __contextClass( $provider ){
+    protected static final function __contextClass( $provider ){
         
         $namespace = explode('.', $provider);
         

@@ -121,6 +121,18 @@ class Uploader extends \CODERS\Framework\Provider{
         return $this;
     }
     /**
+     * @return \CODERS\Framework\Providers\File[]
+     */
+    public final function files(){
+        $provider = self::__contextClass('file');
+        if(class_exists($provider )){
+            return $this->each(function( $meta ){
+                return new File($meta);
+            });
+        }
+        return array();
+    }
+    /**
      * @param function $callable
      * @return array
      */
