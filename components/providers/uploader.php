@@ -28,22 +28,23 @@ class Uploader extends \CODERS\Framework\Provider{
     }
 
     /**
+     * @param string $resource
      * @return string
      */
-    public final function path( $file ){
-        return $this->storage() . '/' . $file;
+    public final function path( $resource ){
+        return $this->storage() . '/' . $resource;
     }
     /**
      * @return boolean
      */
-    public final function exists(){
-        return file_exists($this->storage());
+    public final function exists( $resource = '' ){
+        return file_exists( strlen($resource) ? $this->path($resource) : $this->storage());
     }
     /**
      * @param string $upload
      * @return array
      */
-    private static final function importMeta($upload) {
+    private static final function importUpload($upload) {
 
         $files = array_key_exists($upload, $_FILES) ? $_FILES[$upload] : array();
         $list = array();
@@ -75,7 +76,7 @@ class Uploader extends \CODERS\Framework\Provider{
             return false;
         }
 
-        foreach( self::importMeta($input) as $upload ) {
+        foreach( self::importUpload($input) as $upload ) {
             try{
                 switch( $upload['error'] ){
                     case UPLOAD_ERR_CANT_WRITE:
@@ -123,14 +124,10 @@ class Uploader extends \CODERS\Framework\Provider{
     /**
      * @return \CODERS\Framework\Providers\File[]
      */
-    public final function files(){
-        $provider = self::__contextClass('file');
-        if(class_exists($provider )){
-            return $this->each(function( $meta ){
-                return new File($meta);
-            });
-        }
-        return array();
+    public final function files() {
+        return $this->each(function($meta) {
+            return self::create('file',$meta);
+        });
     }
     /**
      * @param function $callable

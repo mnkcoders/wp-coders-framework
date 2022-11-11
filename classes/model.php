@@ -177,6 +177,13 @@ abstract class Model{
         return $this->module();
         //return count( $this->_module ) > 1 ? $this->_module[1] : $this->_module[0];
     }
+    /**
+     * @return \CODERS\Framework\Model
+     */
+    public function clone( ) {
+        $modelClass = self::class;
+        return new $modelClass( $this->__override($this->values( ) ) );
+    }
 
     /**
      * @return string
@@ -255,6 +262,15 @@ abstract class Model{
             }
         }
         return $this;
+    }
+    /**
+     * Define here the override rules to clone and copy a model
+     * @param array $values
+     * @return array
+     */
+    protected function __override( array $values ){
+        //
+        return $values;
     }
     /** 
      * @param string $element

@@ -99,7 +99,7 @@ abstract class Provider{
      * @param boolean admin
      * @return String
      */
-    private static final function __contextPath( $provider ){
+    protected static final function __contextPath( $provider ){
         $path = explode('.', $provider);
         $root = count($path) > 1 ? \CodersApp::path($path[0]) : \CodersApp::path();
         $pr = count($path) > 1 ? $path[1] : $path[0];
