@@ -244,7 +244,7 @@ abstract class View{
     public function module( $full = false ){
         return $full ? 
                 implode('.', $this->_module):
-                $this->_module[0] ;
+                $this->_module[ count($this->_module) - 1 ] ;
         //$path = explode('/',  $this->__path(true));
         //return $path[count($path)-1] ;
     }
@@ -548,11 +548,12 @@ abstract class View{
      */
     private function __extractModule(){
         $path = $this->__path();
+        $view = preg_replace('/.php$/', '',  substr($path, strrpos($path, '/') + 1 ) );
         $route = explode('/components/views/', $path);
-        return count($route) > 1 ? array(
-                substr($route[0], strrpos($route[0], '/') + 1),
-                preg_replace('/.php$/', '',  substr($route[1], strrpos($route[1], '/'))),
-            ) : '';
+        $base = count($route) > 1 ?
+                substr($route[0], strrpos($route[0], '/') + 1) :
+                'coders-framework';
+        return array( $base , $view );
     }
     /**
      * @return string |PATH
