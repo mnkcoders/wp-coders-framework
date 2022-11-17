@@ -22,8 +22,14 @@ abstract class Model{
     const TYPE_FILE = 'file';
     const TYPE_HIDDEN = 'hidden';
     //
-    
+    /**
+     * @var array [endpoint , module ]
+     */
     private $_module;
+    /**
+     * @var string
+     */
+    private $_dataSource = '';
     /**
      * @var array
      */
@@ -36,14 +42,13 @@ abstract class Model{
     //protected function __construct( $route , array $data = array( ) ) {
     protected function __construct( array $data = array( ) ) {
         
-        /*$this->_module = is_array($route) ? $route : explode('.', $route);
-        
-        if(strlen($this->_module[0]) === 0){
-            $this->_module[0] = \CodersApp::instance()->endPoint();
-        }*/
-        $this->_module = $this->__extractModule();
+        //register endpoint module
+        $this->_module = $this->__module();
+        //define default model name as table name
+        $this->defineDataSource($this->module());
         
         if( count( $data ) ){
+            //input data
             $this->import($data);
         }
     }
@@ -52,30 +57,7 @@ abstract class Model{
      */
     public function __toString() {
         return implode('.', $this->_module);
-        return $this->__class();
-    }
-    /**
-     * Model Class Name
-     * @param bool $full
-     * @return string
-     */
-    protected static final function __class( $full = false ){
-        
-        if( $full ){
-            return get_called_class();
-        }
-
-        $ns = explode('\\', get_called_class() );
-        return $ns[ count($ns) - 1 ];
-    }
-    /**
-     * @return string
-     */
-    protected static final function __model(){
-        return strtolower( preg_replace('/Model$/', '', self::__class()));
-    }
-    protected function dataSource(){
-        return $this->module();
+        //return $this->__class();
     }
     /**
      * @param string $name
@@ -85,19 +67,17 @@ abstract class Model{
         $this->change($name, $value,true);
     }
     /**
-     * @param string $attribute
-     * @param mixed $value
-     * @return \CODERS\Framework\Model
+     * @return array
      */
-    protected final function __reset( $attribute , $value = '' ){
-        foreach( $this->elements() as $element ){
-            if( $this->has($element,$attribute)){
-                $this->set($element, $attribute, $value);
-            }
-        }
-        return $this;
+    public function __serialize() {
+        return $this->values();
     }
-
+    /**
+     * @param array $data
+     */
+    public function __unserialize(array $data ) {
+        $this->import($data);
+    }
     /**
      * @param string $name
      * @return mixed
@@ -137,6 +117,44 @@ abstract class Model{
         }
     }
     
+    /**
+     * Model Class Name
+     * @param bool $full
+     * @return string
+     */
+    protected static final function __class( $full = false ){
+        
+        if( $full ){
+            return get_called_class();
+        }
+
+        $ns = explode('\\', get_called_class() );
+        return $ns[ count($ns) - 1 ];
+    }
+    /**
+     * @return string
+     */
+    protected static final function __model(){
+        return strtolower( preg_replace('/Model$/', '', self::__class()));
+    }
+    protected function dataSource(){
+        return $this->module();
+    }
+    
+    /**
+     * @param string $attribute
+     * @param mixed $value
+     * @return \CODERS\Framework\Model
+     */
+    protected final function __reset( $attribute , $value = '' ){
+        foreach( $this->elements() as $element ){
+            if( $this->has($element,$attribute)){
+                $this->set($element, $attribute, $value);
+            }
+        }
+        return $this;
+    }
+
     
     /**
      * @return string
@@ -155,7 +173,7 @@ abstract class Model{
     /**
      * 
      */
-    private function __extractModule(){
+    private function __module(){
         $path = $this->__path(true);
         $route = explode('/components/models/', $path);
         return count($route) > 1 ? array(
@@ -184,7 +202,6 @@ abstract class Model{
         $modelClass = self::class;
         return new $modelClass( $this->__override($this->values( ) ) );
     }
-
     /**
      * @return string
      */
@@ -252,6 +269,22 @@ abstract class Model{
                 ->define($updated,self::TYPE_DATETIME,array());
     }
     /**
+     * @param string $ds
+     * @return \CODERS\Framework\Model
+     */
+    protected function defineDataSource($ds) {
+        if(strlen($this->_dataSource) === 0 ){
+            $this->_dataSource = $ds;
+        }
+        return $this;
+    }
+    /**
+     * @return string
+     */
+    protected function ds() {
+        return $this->_dataSource;
+    }
+    /**
      * @param \CODERS\Framework\Model $source
      * @return \CODERS\Framework\Model
      */
@@ -271,6 +304,16 @@ abstract class Model{
     protected function __override( array $values ){
         //
         return $values;
+    }
+    /**
+     * @param array $filters
+     * @return \CODERS\Framework\Model
+     */
+    protected function reload(array $filters = array() ) {
+        
+        $data = $this->db()->select($this->ds(),'*',$filters);
+    
+        return count($data) ? $this->import($data) : $this;
     }
     /** 
      * @param string $element
@@ -533,6 +576,18 @@ abstract class Model{
      * @return \CODERS\Framework\Query
      */
     protected final function db(){ return new Query($this->endpoint()); }
+    /** 
+     * @param array $filters
+     * @return \CODERS\Framework\Model
+     */
+    public final function from( array $filters ){
+        $data = $this->load($this->ds(),$filters);
+        if( count($data )){
+            $this->import($data[0]);
+        }
+        return $this;
+    }
+
     /**
      * @param array $route
      * @return string
@@ -624,7 +679,7 @@ abstract class Model{
      * @param array $collection
      * @return \CODERS\Framework\Model[]
      */
-    public static final function fillV2( $source , array $collection ){
+    public static final function List( $source , array $collection ){
         $output = array();
         $class = self::__preload($source);
         if (strlen($class)) {
@@ -658,6 +713,13 @@ abstract class Model{
             return $db->select( $module[1], '*' , $filters );
         }
         return array();
+    }
+    /**
+     * @param string $model
+     * @return \CODERS\Framework\Model
+     */
+    public static function empty($model) {
+        return self::create($model);
     }
 }
 /**
