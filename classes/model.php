@@ -432,7 +432,7 @@ abstract class Model{
      * @param string $name
      * @return number
      */
-    public function count( $name ){
+    public final function count( $name ){
         $count = 'count'. preg_replace('/\s/', '',ucwords( preg_replace('/[\_\-]/', ' ', $name ) ) );
         return method_exists($this, $count) ? $this->$count( ) : 0;
     }
@@ -467,7 +467,7 @@ abstract class Model{
      * @param string $name
      * @return array
      */
-    public function list( $name ){
+    public final function list( $name ){
         $list = 'list'. preg_replace('/_/', '', ucwords($name) );
         return method_exists($this, $list) ? $this->$list( ) : array();
     }
@@ -679,7 +679,7 @@ abstract class Model{
      * @param array $collection
      * @return \CODERS\Framework\Model[]
      */
-    public static final function List( $source , array $collection ){
+    public static function browse( $source , array $collection ){
         $output = array();
         $class = self::__preload($source);
         if (strlen($class)) {
@@ -696,7 +696,7 @@ abstract class Model{
      * @param string $index
      * @return \CODERS\Framework\Model
      */
-    public static final function locate( $source , $id , $index = 'id' ){
+    public static final function select( $source , $id , $index = 'id' ){
         $found = self::fill($source , array( $index => $id ) );
         return count($found) ? $found[0] : null;
     } 
