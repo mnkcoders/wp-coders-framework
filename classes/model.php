@@ -722,6 +722,7 @@ abstract class Model{
         return self::create($model);
     }
 }
+
 /**
  * WPDB Query Handler
  */
